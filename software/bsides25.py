@@ -91,7 +91,7 @@ class Parameter:
 
 led_startup    = True
 led_effects    = []
-led_effect     = Parameter("Light_effect", 0, 3)
+led_effect     = Parameter("Light_effect", 0, 10)
 led_brightness = Parameter("Brightness", 10, 100)
 led_hue        = Parameter("Hue", 180, 360)
 led_sat        = Parameter("Saturation", 100, 100)
@@ -1122,12 +1122,11 @@ class MenuScreen(Screen):
 # NeoPixel effects
 # -----------------------
 def hsv_to_rgb(h, s, v):
-    """Convert hue [0–360], saturation [0–1], value [0–1] to RGB tuple."""
+    """Convert HSV to standard RGB tuple."""
     h = h % 360
     c = v * s
     x = c * (1 - abs((h / 60) % 2 - 1))
     m = v - c
-
     if h < 60:
         r, g, b = c, x, 0
     elif h < 120:
@@ -1140,10 +1139,7 @@ def hsv_to_rgb(h, s, v):
         r, g, b = x, 0, c
     else:
         r, g, b = c, 0, x
-
-    return (int((r + m) * 255),
-            int((g + m) * 255),
-            int((b + m) * 255))
+    return (int((r + m) * 255), int((g + m) * 255), int((b + m) * 255))
 
 def led_eff_off(np, oldstate):
     np.fill((0,0,0))
@@ -1377,6 +1373,43 @@ def led_eff_spiral_spin(np, oldstate):
     return state
 
 
+def led_eff_police(np, oldstate):
+    """
+    Simulates police lights by flashing red and blue strobes on opposite sides.
+    """
+    state = oldstate or {"phase": 0}
+    n = len(np)
+    half_size = n // 2
+
+    # Phase determines which lights are on.
+    # 0-24: Red group on
+    # 25-49: All off
+    # 50-74: Blue group on
+    # 75-99: All off
+    phase = state["phase"]
+
+    s = led_sat.value / 100
+    v = led_brightness.value / 100
+    red = hsv_to_rgb(0, s, v)
+    blue = hsv_to_rgb(240, s, v)
+    off = (0, 0, 0)
+
+    np.fill(off)
+
+    if 0 <= phase < 25:  # Red half
+        for i in range(1, half_size - 1):
+            np[i] = red
+    elif 50 <= phase < 75:  # Blue half
+        for i in range(half_size + 1, n - 1):
+            np[i] = blue
+
+    # Speed controls the flash rate. A higher value means faster flashing.
+    increment = max(1, led_speed.value / 10)
+    state["phase"] = (phase + increment) % 100
+
+    return state
+
+
 async def neopixel_task(np):
     global led_effect
     global led_effects
@@ -1392,6 +1425,7 @@ async def neopixel_task(np):
                    ("Dual Hue", led_eff_dual_hue),        
                    ("Aurora", led_eff_aurora),
                    ("Spiral Spin", led_eff_spiral_spin),
+                   ("Police", led_eff_police),
                    ("Cycle_All", led_eff_autocycle)]
 
     while True:
