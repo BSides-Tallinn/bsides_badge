@@ -1,0 +1,1 @@
+"""Dynamically discovered badge games."""
