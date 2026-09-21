@@ -58,12 +58,19 @@ Use Python 3.10 or newer on Windows, Linux, or macOS. One Python tool is used so
 port detection, filtering, configuration migration, and release discovery stay
 consistent across platforms.
 
+(Linux) Make sure to add your user to `dialout` group to access the hardware serial port. Log-out/in or restart after this command.
+```console
+sudo usermod -aG dialout "$USER"
+```
+
 Initialize the workstation. This installs missing `esptool` and `mpremote`
 packages and downloads the newest stable `ESP32_GENERIC_C3` MicroPython image:
 
 ```console
 python scripts/badge.py init
 ```
+
+If `init` fails on your machine, you can try to install `esptool` and `mpremote` via `pipx`.
 
 Erase the chip, flash that image, and upload the application:
 
