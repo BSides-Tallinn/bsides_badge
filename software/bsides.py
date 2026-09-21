@@ -111,6 +111,14 @@ params = {
 snake_high_score = Parameter("SnakeHighScore", 0, 9999)
 params["SnakeHighScore"] = snake_high_score
 
+# --- Pacman high score param (persistent in badge.json) ---
+pacman_high_score = Parameter("PacmanHighScore", 0, 99999)
+params["PacmanHighScore"] = pacman_high_score
+
+# --- Tetris high score param (persistent in badge.json) ---
+tetris_high_score = Parameter("TetrisHighScore", 0, 999999)
+params["TetrisHighScore"] = tetris_high_score
+
 def save_params():
     badge_config["params"] = {
         name: param.value for name, param in params.items()

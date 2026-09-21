@@ -38,7 +38,9 @@ Runtime settings are stored in `/badge.json` on the badge:
     "Saturation": 100,
     "Speed": 30,
     "Light_effect": 0,
-    "SnakeHighScore": 0
+    "SnakeHighScore": 0,
+    "PacmanHighScore": 0,
+    "TetrisHighScore": 0
   }
 }
 ```
@@ -139,7 +141,8 @@ currently measured battery voltage as its final output line. It adds
 ## Games
 
 Open **Menu -> Games** to select an installed game. The menu discovers Python
-files in `software/games` at runtime. Snake and two-player Pong are included.
+files in `software/games` at runtime. Pacman, Snake, Tetris, and two-player Pong
+are included.
 
 To add a game, place a `.py` file in `software/games`. It must export:
 
@@ -151,6 +154,37 @@ GameScreen = MyGameScreen
 `GameScreen(oled)` must provide `render()` and async `handle_button(btn)`
 methods. Set `manages_own_render = True` when the game owns an animation loop.
 On exit, return `bsides.GamesScreen(oled)`.
+
+### Pacman
+
+Single player on a 32x12 cell maze with three ghosts, power pellets, and a
+wrap-around tunnel. Turns are relative to the current heading and are applied
+at the first cell where they fit:
+
+- NEXT turns clockwise, PREV turns counter-clockwise. Press the same button
+  twice to reverse.
+- SELECT pauses and resumes, or restarts after game over.
+- BACK exits to the Games menu.
+
+Dots score 10, power pellets 50, and eaten ghosts 200, 400, 800, and 1600 in a
+row. An extra life is awarded at 10000 points. Clearing the maze starts the next
+level with faster ghosts. The high score is stored as `PacmanHighScore` in
+`badge.json`.
+
+### Tetris
+
+A 10x15 well in the middle of the display with the next piece, level, and line
+count on the left and the score and high score on the right. A dot marks where
+the falling piece will land.
+
+- NEXT moves right and PREV moves left. Hold either to keep sliding.
+- SELECT rotates. Hold SELECT for a soft drop.
+- BACK exits to the Games menu. SELECT restarts after game over.
+
+Clearing one to four lines at once scores 40, 100, 300, or 1200 times the
+level, and each soft-dropped row adds one point. The level rises every ten
+lines and gravity speeds up with it. The high score is stored as
+`TetrisHighScore` in `badge.json`.
 
 ### Pong link
 

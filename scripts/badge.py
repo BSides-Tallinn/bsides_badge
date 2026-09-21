@@ -75,7 +75,7 @@ def ensure_tools(install: bool) -> None:
         raise BadgeToolError(
             "Missing {}. Run 'python scripts/badge.py init'.".format(
                 ", ".join(packages)))
-    run([sys.executable, "-m", "pip", "install", "--user"] + packages)
+    run([sys.executable, "-m", "pip", "install"] + packages)
 
 
 def parse_latest_firmware(page: str, base_url: str = DOWNLOAD_PAGE) -> Firmware:
