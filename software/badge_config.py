@@ -33,6 +33,9 @@ DEFAULT_PARAMS = {
     "Speed": 30,
     "Light_effect": 0,
     "SnakeHighScore": 0,
+    "PacmanHighScore": 0,
+    "TetrisHighScore": 0,
+    "FlappyHighScore": 0,
 }
 
 
