@@ -1,19 +1,19 @@
 import urandom
 import uasyncio as asyncio
 
-import bsides25
+import bsides
 
 
 GAME_NAME = "Snake"
 
-BTN_NEXT = bsides25.BTN_NEXT
-BTN_PREV = bsides25.BTN_PREV
-BTN_SELECT = bsides25.BTN_SELECT
-BTN_BACK = bsides25.BTN_BACK
-wri6 = bsides25.wri6
+BTN_NEXT = bsides.BTN_NEXT
+BTN_PREV = bsides.BTN_PREV
+BTN_SELECT = bsides.BTN_SELECT
+BTN_BACK = bsides.BTN_BACK
+wri6 = bsides.wri6
 
 
-class GameScreen(bsides25.Screen):
+class GameScreen(bsides.Screen):
     """
     Snake for 128x64 SSD1306.
     - Grid: 4x4 px cells
@@ -54,7 +54,7 @@ class GameScreen(bsides25.Screen):
         self.score = 0
 
         try:
-            self.high_score = bsides25.snake_high_score.value
+            self.high_score = bsides.snake_high_score.value
         except NameError:
             self.high_score = 0
 
@@ -122,8 +122,8 @@ class GameScreen(bsides25.Screen):
         if self.score > self.high_score:
             self.high_score = self.score
             try:
-                bsides25.snake_high_score.value = self.high_score
-                bsides25.save_params()
+                bsides.snake_high_score.value = self.high_score
+                bsides.save_params()
             except Exception:
                 pass
         # show overlay immediately
@@ -298,6 +298,6 @@ class GameScreen(bsides25.Screen):
                     self._task.cancel()
             except Exception:
                 pass
-            return bsides25.GamesScreen(self.oled)
+            return bsides.GamesScreen(self.oled)
 
         return self

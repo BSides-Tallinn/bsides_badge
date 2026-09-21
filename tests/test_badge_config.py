@@ -20,6 +20,11 @@ SPEC.loader.exec_module(badge_config)
 
 
 class BadgeConfigTests(unittest.TestCase):
+    def test_longest_device_id_fits_builtin_oled_text_row(self):
+        text = badge_config.format_device_id("FFFFFFFFFFFF")
+        self.assertEqual(text, "ID:FFFFFFFFFFFF")
+        self.assertLessEqual(len(text) * 8, 128)
+
     def test_hardware_variants(self):
         self.assertEqual(badge_config.hardware_for("2025_prototype")["oled_address"], 0x3D)
         self.assertEqual(badge_config.hardware_for("2025")["select_pin"], 4)

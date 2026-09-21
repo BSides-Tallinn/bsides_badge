@@ -126,7 +126,7 @@ GameScreen = MyGameScreen
 
 `GameScreen(oled)` must provide `render()` and async `handle_button(btn)`
 methods. Set `manages_own_render = True` when the game owns an animation loop.
-On exit, return `bsides25.GamesScreen(oled)`.
+On exit, return `bsides.GamesScreen(oled)`.
 
 ### Pong link
 

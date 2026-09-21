@@ -124,6 +124,10 @@ class BadgeToolTests(unittest.TestCase):
             str(badge_tool.SOFTWARE_DIR / "games"),
             str(badge_tool.SOFTWARE_DIR / "main.py"), ":",
         ]])
+        remove_commands = [call.args[0] for call in run.call_args_list
+                           if "rm" in call.args[0]]
+        self.assertIn(["mpremote", "fs", "rm", ":/bsides25.py"],
+                      remove_commands)
 
     def test_merge_preserves_identity_and_parameters(self):
         remote = {

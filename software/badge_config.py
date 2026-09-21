@@ -6,6 +6,7 @@ import urandom
 
 BADGE_FILENAME = "badge.json"
 SUPPORTED_BADGE_VERSIONS = ("2025_prototype", "2025", "2026")
+DISPLAY_ID_PREFIX = "ID:"
 
 HARDWARE = {
     "2025_prototype": {
@@ -53,6 +54,11 @@ def is_valid_device_id(value):
         return True
     except ValueError:
         return False
+
+
+def format_device_id(value):
+    """Format a valid ID for the OLED's 16-character built-in text row."""
+    return DISPLAY_ID_PREFIX + value
 
 
 def _read_text(filename):

@@ -1,5 +1,8 @@
+"""BSides badge user interface and application entry point."""
+
 import sys
 import os
+import gc
 import network
 import socket
 import ssl
@@ -7,10 +10,11 @@ import json
 import uasyncio as asyncio
 import time, micropython
 from machine import Pin, I2C
-import ssd1306, neopixel
+import ssd1306
 import bsides_logo
-import math
-from badge_config import hardware_for, load_badge_config, save_badge_config
+import rgb_leds
+from badge_config import (
+    format_device_id, hardware_for, load_badge_config, save_badge_config)
 from battery import estimate_soc, read_battery_voltage
 
 # Writer
@@ -31,10 +35,6 @@ badge_config = load_badge_config()
 BADGE_VERSION = badge_config["badge_version"]
 HARDWARE = hardware_for(BADGE_VERSION)
 OLED_ADDRESS = HARDWARE["oled_address"]
-
-NEOPIXEL_PIN = 3
-NEOPIXEL_COUNT = 16
-NEOPIXEL_FPS = 50
 
 # Buttons
 BTN_NEXT_PIN = 5      # Next / Increase
@@ -95,8 +95,7 @@ class Parameter:
 # LED effects
 # -----------------------
 
-led_startup    = True
-led_effects    = []
+led_effects    = rgb_leds.LED_EFFECTS
 led_effect     = Parameter("Light_effect", 0, 10)
 led_brightness = Parameter("Brightness", 10, 100)
 led_hue        = Parameter("Hue", 180, 360)
@@ -136,16 +135,6 @@ def load_params():
 USERNAME = badge_config.get("holder_name") or None
 device_id = badge_config["device_id"]
 print("Device ID: {}".format(device_id))
-# -----------------------
-# Hardware init
-# -----------------------
-
-def init_neopixels():
-    np = neopixel.NeoPixel(Pin(NEOPIXEL_PIN, Pin.OUT), NEOPIXEL_COUNT)
-    np.fill((0,0,0))
-    np.write()
-    return np
-
 # -----------------------
 # Button IRQ handling
 # -----------------------
@@ -453,9 +442,11 @@ class StatusScreen(Screen):
         # filename. Use the framebuffer's 8-pixel font for the heading so all
         # four 2026 status rows fit without trying to start a row at y=64.
         self.oled.text("Status", 0, 0, 1)
+        # FrameBuffer.text() is fixed at 8 pixels per character. "ID:" plus
+        # every valid 12-character ID is 15 characters (120 pixels).
+        self.oled.text(format_device_id(device_id), 0, 8, 1)
 
         lines = [
-            "ID: {}".format(device_id),
             "HW: {}".format(BADGE_VERSION),
             "Git: {}".format(badge_config.get("git_commit", "unknown")),
         ]
@@ -469,7 +460,7 @@ class StatusScreen(Screen):
                 print("Battery read failed:", exc)
                 lines.append("Bat: read error")
 
-        y = 8
+        y = 16
         for line in lines:
             wri6.set_textpos(self.oled, y, 0)
             wri6.printstring(self._fit(line))
@@ -544,6 +535,9 @@ class FetchNameScreen(Screen):
         return self
 
     async def _connect_wifi(self):
+        # Logo modules contain large bytearrays. Make sure none remain cached
+        # before the Wi-Fi driver allocates its buffers.
+        unload_sponsor_logos()
         if not self.wlan:
             self.wlan = network.WLAN(network.STA_IF)
         self.wlan.active(True)
@@ -621,17 +615,16 @@ class FetchNameScreen(Screen):
     def render(self):
         self.oled.fill(0)
 
-        # header = device_id
-        wri6.set_textpos(self.oled, 0, 0)
-        wri6.printstring("ID: {}".format(device_id))
+        # 15 fixed-width characters fit in the 128-pixel display.
+        self.oled.text(format_device_id(device_id), 0, 0, 1)
 
         if self.message:
-            y = wri6.font.height() + 2
+            y = 10
             wri6.set_textpos(self.oled, y, 0)
             wri6.printstring(self.message)
         else:
             # menu item
-            y = wri6.font.height() + 2
+            y = 10
             wri6.set_textpos(self.oled, y, 0)
             wri6.printstring(URL_QR)
 
@@ -680,40 +673,58 @@ class BadgeScreen(ListScreen):
 # Sponsors screens
 # -----------------------
 
+LOGO_FOLDER = "logos"
+
+
+def unload_sponsor_logos():
+    """Evict generated logo modules and release their framebuffer bytearrays."""
+    try:
+        filenames = os.listdir(LOGO_FOLDER)
+    except OSError:
+        filenames = ()
+    for filename in filenames:
+        if filename.endswith(".py"):
+            module_name = filename[:-3]
+            if module_name in sys.modules:
+                del sys.modules[module_name]
+    gc.collect()
+
 class SponsorsScreen(Screen):
     def __init__(self, oled):
         super().__init__(oled)
 
-        # Import logos dynamically
-        LOGO_FOLDER = "logos"
+        # Keep only filenames. Each framebuffer is loaded for one render and
+        # immediately evicted so ten 1 KiB images are never retained together.
         if LOGO_FOLDER not in sys.path:
             sys.path.append(LOGO_FOLDER)
-        logo_files = sorted([f for f in os.listdir(LOGO_FOLDER) if f.endswith(".py")])
-
-        self.logos = []
+        unload_sponsor_logos()
+        self.logo_modules = sorted(
+            filename[:-3] for filename in os.listdir(LOGO_FOLDER)
+            if filename.endswith(".py"))
         self.current_logo = 0
-        for f in logo_files:
-            module_name = f[:-3]  # strip '.py'
-            mod = __import__(module_name)
-            if hasattr(mod, "fb"):
-                self.logos.append(mod.fb)
-            else:
-                print(f"Warning: {module_name} has no attribute 'fb'")
-
-        if not self.logos:
+        if not self.logo_modules:
             raise RuntimeError("No valid logos found!")
 
     def render(self):
-        self.oled.fill(0)
-        self.oled.blit(self.logos[self.current_logo], 0, 0)
-        self.oled.show()
+        module_name = self.logo_modules[self.current_logo]
+        module = None
+        try:
+            module = __import__(module_name)
+            self.oled.fill(0)
+            self.oled.blit(module.fb, 0, 0)
+            self.oled.show()
+        finally:
+            if module is not None:
+                del module
+            unload_sponsor_logos()
 
     async def handle_button(self, btn):
         if btn == BTN_NEXT:
-            self.current_logo = (self.current_logo + 1) % len(self.logos)
+            self.current_logo = (self.current_logo + 1) % len(self.logo_modules)
         elif btn == BTN_PREV:
-            self.current_logo = (self.current_logo - 1) % len(self.logos)
+            self.current_logo = (self.current_logo - 1) % len(self.logo_modules)
         if btn == BTN_BACK:
+            unload_sponsor_logos()
             return MenuScreen(self.oled)
         return self
 
@@ -863,330 +874,6 @@ class MenuScreen(Screen):
         return self
 
 # -----------------------
-# NeoPixel effects
-# -----------------------
-def hsv_to_rgb(h, s, v):
-    """Convert HSV to standard RGB tuple."""
-    h = h % 360
-    c = v * s
-    x = c * (1 - abs((h / 60) % 2 - 1))
-    m = v - c
-    if h < 60:
-        r, g, b = c, x, 0
-    elif h < 120:
-        r, g, b = x, c, 0
-    elif h < 180:
-        r, g, b = 0, c, x
-    elif h < 240:
-        r, g, b = 0, x, c
-    elif h < 300:
-        r, g, b = x, 0, c
-    else:
-        r, g, b = c, 0, x
-    return (int((r + m) * 255), int((g + m) * 255), int((b + m) * 255))
-
-def led_eff_off(np, oldstate):
-    np.fill((0,0,0))
-    return oldstate
-
-def led_eff_rainbow(np, oldstate):
-    """Rainbow running around the circle"""
-    pos = oldstate or 0
-    for i in range(len(np)):
-        pixel_hue = ((i * 360 // len(np)) + pos) % 360
-        np[i] = hsv_to_rgb(pixel_hue, led_sat.value/100, led_brightness.value/100)
-    return (pos + led_speed.value/10) % 360
-
-def led_eff_breathe(np, oldstate):
-    """All LEDs smoothly brighten and dim"""
-    br, d = oldstate or (0, 1)
-    rgb = hsv_to_rgb(led_hue.value, led_sat.value/100, br*led_brightness.value/100)
-
-    for i in range(len(np)):
-        np[i] = rgb
-    br += d * led_speed.value / 1000
-    if br >= 1.0:
-        br = 1.0
-        d = -1
-    elif br <= 0.0:
-        br = 0.0
-        d = 1
-    return (br, d)
-
-def led_eff_comet(np, oldstate, tail=5):
-    """Single bright dot with fading tail"""
-    state = oldstate or 0
-    head_idx = int(state) % len(np)
-    fade_coeff = 0.5 + ((led_speed.maxval - led_speed.value) / led_speed.maxval * 0.4)
-    # fade all LEDs slightly
-    for i in range(len(np)):
-        np[i] = tuple(int(x * fade_coeff) for x in np[i])
-    # light the comet head
-    np[head_idx] = hsv_to_rgb(led_hue.value, led_sat.value/100, led_brightness.value/100)
-    
-    return state + led_speed.value / 100
-
-
-def led_eff_startup(np, oldstate):
-    head, phase = oldstate or (0, 0)
-
-    rgb_on = hsv_to_rgb(led_hue.value, led_sat.value/100, led_brightness.value/100)
-    rgb_off = (0,0,0)
-    for i in range(len(np)):
-        rgb = rgb_on if (i <= head) == (phase == 0) else rgb_off
-        np[i] = rgb
-    
-    if head < len(np) - 1:
-        return (head + 1, phase)
-    elif phase == 0:
-        return (0, 1)
-    else:
-        return None
-
-
-def led_eff_autocycle(np, oldstate):
-    """
-    Automatically cycles through all effects every minute.
-    Reuse the existing led_effect functions one by one.
-    """
-    state = oldstate or {"idx": 1, "timer": time.ticks_ms(), "inner": None}
-    now = time.ticks_ms()
-
-    # every 60 seconds go to next effect (skip index 0 = Off)
-    if time.ticks_diff(now, state["timer"]) > 60_000:
-        state["idx"] += 1
-        if state["idx"] >= len(led_effects):
-            state["idx"] = 1        # wrap around, stay above 0
-        state["timer"] = now
-        state["inner"] = None       # reset inner effect state
-
-    # run the current inner effect
-    effect_fn = led_effects[state["idx"]][1]
-    state["inner"] = effect_fn(np, state["inner"])
-    return state
-
-
-def led_eff_rainbow_comet(np, oldstate):
-    """
-    A comet that runs around the ring while its color cycles through the rainbow.
-    The trail fades naturally, preserving past hues for a multicolor tail.
-    """
-    # state keeps a sub-pixel position and a hue
-    state = oldstate or {"pos": 0.0, "hue": 0}
-
-    # Where's the head right now?
-    head_idx = int(state["pos"]) % len(np)
-
-    # Fade existing LEDs slightly to create a tail
-    # Faster speed -> slightly less fade; slower speed -> more persistence
-    fade_coeff = 0.5 + ((led_speed.maxval - led_speed.value) / led_speed.maxval * 0.4)
-    for i in range(len(np)):
-        r, g, b = np[i]
-        np[i] = (int(r * fade_coeff), int(g * fade_coeff), int(b * fade_coeff))
-
-    # Set the head with the current rainbow hue
-    rgb = hsv_to_rgb(state["hue"], led_sat.value/100, led_brightness.value/100)
-    np[head_idx] = rgb
-
-    # Advance position and hue based on Speed
-    state["pos"] += led_speed.value / 100     # movement per frame
-    state["hue"] = (state["hue"] + max(1, int(led_speed.value / 10))) % 360
-
-    return state
-
-
-def led_eff_ping_pong(np, oldstate):
-    """
-    Two bouncing heads with fading tails (like a KITT/Cylon sweep on a ring).
-    """
-    n = len(np)
-    state = oldstate or {"pos": 0.0, "dir": 1}
-
-    # Fade existing pixels for trailing effect
-    fade = 0.5 + ((led_speed.maxval - led_speed.value) / led_speed.maxval * 0.4)
-    for i in range(n):
-        r, g, b = np[i]
-        np[i] = (int(r * fade), int(g * fade), int(b * fade))
-
-    # Primary head position (linear, reflecting at ends)
-    pos = state["pos"]
-    dir_ = state["dir"]
-    speed = max(0.05, led_speed.value / 100)  # movement per frame
-    pos += dir_ * speed
-    if pos <= 0:
-        pos = 0
-        dir_ = 1
-    elif pos >= n - 1:
-        pos = n - 1
-        dir_ = -1
-
-    head1 = int(pos)
-    # Second head mirrors across the strip ends
-    head2 = (n - 1) - head1
-
-    rgb = hsv_to_rgb(led_hue.value, led_sat.value/100, led_brightness.value/100)
-    np[head1] = rgb
-    np[head2] = rgb
-
-    state["pos"], state["dir"] = pos, dir_
-    return state
-
-
-def led_eff_dual_hue(np, oldstate):
-    """
-    Opposite halves blend Hue -> Hue+180, rotating slowly.
-    """
-    state = oldstate or {"phase": 0.0}
-    n = len(np)
-
-    hue_a = led_hue.value % 360
-    hue_b = (hue_a + 180) % 360
-    s = led_sat.value / 100
-    v = led_brightness.value / 100
-
-    for i in range(n):
-        # angle around ring with a rotating offset
-        a = (2 * math.pi * i / n) + state["phase"]
-        # smooth, mirrored gradient: 1 on one side, 0 on the opposite side
-        m = 0.5 * (1 + math.cos(a))  # 1..0..1 around the circle
-        # interpolate hue between A and B by m
-        # (distance <= 180 so simple lerp is fine)
-        hue = (hue_a * m + hue_b * (1 - m)) % 360
-        np[i] = hsv_to_rgb(hue, s, v)
-
-    # rotate divider; Speed controls rotation rate
-    state["phase"] += led_speed.value / 400.0
-    return state
-
-
-def led_eff_aurora(np, oldstate):
-    """
-    Northern-lights style waves in green and purple.
-    """
-    state = oldstate or {"p1": 0.0, "p2": 0.0}
-    n = len(np)
-
-    hue_g = 130   # green-ish
-    hue_p = 280   # purple-ish
-    s = (led_sat.value / 100) * 0.9
-    v_max = led_brightness.value / 100
-
-    for i in range(n):
-        x = 2 * math.pi * i / n
-        # two gentle, offset waves
-        w1 = 0.5 * (1 + math.sin(x + state["p1"]))       # 0..1
-        w2 = 0.5 * (1 + math.sin(2 * x - state["p2"]))   # 0..1
-
-        # color mix and brightness breathing
-        mix = 0.6 * w1 + 0.4 * (1 - w2)                  # 0..1
-        hue = (hue_g * mix + hue_p * (1 - mix)) % 360
-        v = (0.25 + 0.75 * (0.5 * (1 + math.sin(x*0.8 + state["p2"]/2)))) * v_max
-
-        np[i] = hsv_to_rgb(hue, s, v)
-
-    # slow evolving phases; Speed affects flow
-    sp = max(0.05, led_speed.value / 200.0)
-    state["p1"] += sp * 0.6
-    state["p2"] += sp * 0.3
-    return state
-
-
-def led_eff_spiral_spin(np, oldstate):
-    """
-    Rotating brightness wave around the ring, giving a spiral illusion.
-    """
-    state = oldstate or {"phase": 0.0}
-    n = len(np)
-    waves = 2  # try 1, 2, or 3 for different looks
-    gamma = 1.6  # contrast
-
-    s = led_sat.value/100
-    v_base = led_brightness.value/100
-    hue = led_hue.value
-
-    for i in range(n):
-        # normalized position around the ring
-        t = (i / n) * (2 * math.pi * waves) + state["phase"]
-        b = 0.5 * (1 + math.sin(t))              # 0..1
-        b = b ** gamma                           # contrast curve
-        r, g, b_rgb = hsv_to_rgb(hue, s, v_base * b)
-        np[i] = (r, g, b_rgb)
-
-    # Rotate the wave; speed controls angular velocity
-    state["phase"] += (led_speed.value / 200)    # tweak feel here
-    return state
-
-
-def led_eff_police(np, oldstate):
-    """
-    Simulates police lights by flashing red and blue strobes on opposite sides.
-    """
-    state = oldstate or {"phase": 0}
-    n = len(np)
-    half_size = n // 2
-
-    # Phase determines which lights are on.
-    # 0-24: Red group on
-    # 25-49: All off
-    # 50-74: Blue group on
-    # 75-99: All off
-    phase = state["phase"]
-
-    s = led_sat.value / 100
-    v = led_brightness.value / 100
-    red = hsv_to_rgb(0, s, v)
-    blue = hsv_to_rgb(240, s, v)
-    off = (0, 0, 0)
-
-    np.fill(off)
-
-    if 0 <= phase < 25:  # Red half
-        for i in range(1, half_size - 1):
-            np[i] = red
-    elif 50 <= phase < 75:  # Blue half
-        for i in range(half_size + 1, n - 1):
-            np[i] = blue
-
-    # Speed controls the flash rate. A higher value means faster flashing.
-    increment = max(1, led_speed.value / 10)
-    state["phase"] = (phase + increment) % 100
-
-    return state
-
-
-async def neopixel_task(np):
-    global led_effect
-    global led_effects
-    global led_startup
-    t = None
-    prev_effect = 0
-    led_effects = [("Off", led_eff_off),
-                   ("Rainbow", led_eff_rainbow),
-                   ("Breathe", led_eff_breathe),
-                   ("Comet", led_eff_comet),
-                   ("Rainbow Comet", led_eff_rainbow_comet),
-                   ("Ping-Pong", led_eff_ping_pong),
-                   ("Dual Hue", led_eff_dual_hue),        
-                   ("Aurora", led_eff_aurora),
-                   ("Spiral Spin", led_eff_spiral_spin),
-                   ("Police", led_eff_police),
-                   ("Cycle_All", led_eff_autocycle)]
-
-    while True:
-        if led_startup == True:
-            t = led_eff_startup(np, t)
-            if t == None:
-                led_startup = False
-        else:
-            if prev_effect != led_effect.value:
-                t = None
-                prev_effect = led_effect.value
-            if led_effect.value in range(len(led_effects)):
-                t = led_effects[led_effect.value][1](np, t)
-        np.write()
-        await asyncio.sleep_ms(int(1000/NEOPIXEL_FPS))
-
-# -----------------------
 # UI manager
 # -----------------------
 screen = None
@@ -1290,7 +977,7 @@ async def inactivity_task(oled):
 # -----------------------
 async def main():
     global button_event, last_activity
-    np = init_neopixels()
+    np = rgb_leds.init_neopixels()
     button_event = asyncio.Event()
     last_activity = time.ticks_ms()
 
@@ -1299,7 +986,10 @@ async def main():
     show_bsides_logo(oled)
     print("Username: {}".format(USERNAME))
 
-    await asyncio.gather(ui_task(oled), inactivity_task(oled), neopixel_task(np))
+    await asyncio.gather(
+        ui_task(oled), inactivity_task(oled),
+        rgb_leds.neopixel_task(
+            np, led_effect, led_brightness, led_hue, led_sat, led_speed))
 
 try:
     asyncio.run(main())

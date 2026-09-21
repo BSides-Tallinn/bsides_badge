@@ -27,6 +27,7 @@ DOWNLOAD_PAGE = "https://micropython.org/download/ESP32_GENERIC_C3/"
 SUPPORTED_BADGES = ("2025_prototype", "2025", "2026")
 SKIPPED_NAMES = {"badge.json"}
 LEGACY_FILES = ("params.json", "id.txt", "yourname.txt")
+OBSOLETE_FILES = ("bsides25.py",)
 
 
 class BadgeToolError(RuntimeError):
@@ -329,8 +330,8 @@ def upload_tree(port: str | None, config: dict[str, Any]) -> str | None:
             + [str(path) for path in entries] + [":"])
     write_remote_config(port, config)
 
-    for legacy in LEGACY_FILES:
-        run(mpremote_prefix(port) + ["fs", "rm", ":/" + legacy], check=False,
+    for stale_file in LEGACY_FILES + OBSOLETE_FILES:
+        run(mpremote_prefix(port) + ["fs", "rm", ":/" + stale_file], check=False,
             capture=True, timeout=20)
     battery_line = battery_voltage_line(port, config)
     run(mpremote_prefix(port) + ["reset"], check=False, timeout=20)

@@ -14,7 +14,7 @@ UART_RX = 20
 UART_TX = 21
 UART_BAUD = 115200
 
-# Button ids (same values as bsides25)
+# Button ids (same values as bsides)
 BTN_NEXT = 1
 BTN_PREV = 2
 BTN_SELECT = 3
@@ -65,8 +65,8 @@ class PongScreen:
         self.pl_x = 2
         self.pr_x = oled.width - 2 - PADDLE_W
 
-        import bsides25
-        self.my_id = bsides25.device_id
+        import bsides
+        self.my_id = bsides.device_id
 
         self.uart = machine.UART(UART_ID, baudrate=UART_BAUD,
                                  tx=machine.Pin(UART_TX),
@@ -408,8 +408,8 @@ class PongScreen:
     async def handle_button(self, btn):
         if btn == BTN_BACK:
             await self._stop()
-            import bsides25
-            return bsides25.GamesScreen(self.oled)
+            import bsides
+            return bsides.GamesScreen(self.oled)
         if self.phase in ("count", "play"):
             if btn == BTN_NEXT:
                 self.paddle_y = self._clamp_paddle(self.paddle_y - PADDLE_STEP)
@@ -431,5 +431,5 @@ class PongScreen:
         return self
 
 
-# Contract used by bsides25.discover_games().
+# Contract used by bsides.discover_games().
 GameScreen = PongScreen
