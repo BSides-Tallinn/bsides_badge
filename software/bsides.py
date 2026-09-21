@@ -649,7 +649,7 @@ class CodeRepoScreen(Screen):
 
         y = wri10.font.height() + 4
         wri6.set_textpos(self.oled, y, 0)
-        wri6.printstring("github.com/ks000/ bsides_badge")
+        wri6.printstring("github.com/ BSides-Tallinn/ bsides_badge")
 
         self.oled.show()
 
@@ -797,7 +797,7 @@ class OurteamScreen(TextScreen):
         text = (
             "Organizers: Hans, Silvia, Matis, Liisa, Johanna, Martti, Rainer, Kadi\n\n"
             "Badge: Konstantin\n\n"
-            "Volunteers: Elis, Elle, Kristo, Merli, Hanna, Liam, Sten"
+            "Volunteers: Kristo, Merli, Hanna, Sten, Beekay, Liam, Hordii, Armin, Alex"
         )
         super().__init__(oled, wri6, text)
 
