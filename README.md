@@ -5,11 +5,11 @@ badge.
 
 ## Supported hardware
 
-| Badge version | OLED address | SELECT | Battery measurement |
-| --- | --- | --- | --- |
-| `2025_prototype` | `0x3D` | GPIO4 | No |
-| `2025` | `0x3C` | GPIO4 | No |
-| `2026` | `0x3C` | GPIO10 | GPIO4 / ADC1_CH4 |
+| Badge version | OLED address | SELECT | Battery measurement | Appearance |
+| --- | --- | --- | --- | --- |
+| `2025_prototype` | `0x3D` | GPIO4 | No | Cylindrical battery, empty back side |
+| `2025` | `0x3C` | GPIO4 | No | Cylindrical battery, "BSIDES #5" and wolf on the back side |
+| `2026` | `0x3C` | GPIO10 | GPIO4 / ADC1_CH4 | Flat LiPo battery, "BSIDES #6" and wolf on the back side |
 
 The 2026 battery input uses the schematic's 100 kΩ / 20 kΩ divider. The status
 screen multiplies the ADC voltage by six and estimates LiPo state of charge from
@@ -78,18 +78,27 @@ sudo usermod -aG dialout "$USER"
 ```
 
 Initialize the workstation. This installs missing `esptool` and `mpremote`
-packages and downloads the newest stable `ESP32_GENERIC_C3` MicroPython image:
+packages and downloads the newest stable `ESP32_GENERIC_C3` MicroPython image.
+If `init` fails on your Linux machine, try installing `esptool` and `mpremote` via `pipx`.
 
 ```console
 python scripts/badge.py init
 ```
 
-If `init` fails on your machine, you can try to install `esptool` and `mpremote` via `pipx`.
+The following commands will try to connect to ESP32 chip on the badge via
+the USB-C connector (the badge has has to be turned on with small switch SW2
+near the SELECT button).
 
 Erase the chip, flash that image, and upload the application:
 
 ```console
 python scripts/badge.py flash --badge-version 2026
+```
+
+The same with full wipe (no previous settings restored)
+
+```console
+python scripts/badge.py flash --wipe --badge-version 2026
 ```
 
 When reachable before erasing, the tool preserves the badge ID, holder name,
@@ -101,7 +110,7 @@ already empty badge and creates `badge.json` from the repository defaults.
 Upload only application files:
 
 ```console
-python scripts/badge.py upload --badge-version 2025
+python scripts/badge.py upload --badge-version 2026
 ```
 
 Set or change the holder's name:
@@ -130,6 +139,10 @@ and branch.
 If `mpremote` cannot interrupt the running application, hold SELECT while
 resetting or power-cycling the badge. The correct SELECT pin is chosen from
 `badge.json` on both 2025 and 2026 hardware.
+
+If your badge is somehow bricked (wrong version flashed, etc.) and does not
+respond to `esptool`, try  holding down BACK button (GPIO9) while resetting
+or turning your badge on. This will start ESP32 in bootloader mode.
 
 Run `python scripts/badge.py --help` or a subcommand with `--help` for all
 options. After a successful operation on a 2026 badge, the tool prints the
