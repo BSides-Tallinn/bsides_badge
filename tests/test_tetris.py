@@ -167,7 +167,7 @@ class GameFlowTests(unittest.TestCase):
     def setUp(self):
         random.seed(7)
         _Clock.now = 1000
-        sys.modules["bsides"].btn_state.clear()
+        tetris.bsides.btn_state.clear()
         self.game = tetris.GameScreen(_FakeOled())
 
     def test_line_clear_scores_and_spawns_next_piece(self):
@@ -204,8 +204,8 @@ class GameFlowTests(unittest.TestCase):
     def test_stacking_to_the_top_ends_game_and_saves_high_score(self):
         g = self.game
         saved = []
-        sys.modules["bsides"].tetris_high_score = types.SimpleNamespace(value=0)
-        sys.modules["bsides"].save_params = lambda: saved.append(True)
+        tetris.bsides.tetris_high_score = types.SimpleNamespace(value=0)
+        tetris.bsides.save_params = lambda: saved.append(True)
         g.score = 500
         for y in range(1, tetris.ROWS):
             g.well[y] = tetris.FULL_ROW & ~1
@@ -213,7 +213,7 @@ class GameFlowTests(unittest.TestCase):
         g._fall()
         self.assertTrue(g.game_over)
         self.assertEqual(g.high_score, 500)
-        self.assertEqual(sys.modules["bsides"].tetris_high_score.value, 500)
+        self.assertEqual(tetris.bsides.tetris_high_score.value, 500)
         self.assertTrue(saved)
 
     def test_random_play_never_crashes(self):
