@@ -1,0 +1,14 @@
+{
+  "badge_version": "2025",
+  "device_id": "",
+  "holder_name": "",
+  "git_commit": "unknown",
+  "params": {
+    "Brightness": 10,
+    "Hue": 180,
+    "Saturation": 100,
+    "Speed": 30,
+    "Light_effect": 0,
+    "SnakeHighScore": 0
+  }
+}

@@ -1,7 +1,5 @@
 import sys
 import os
-import ubinascii
-import urandom
 import network
 import socket
 import ssl
@@ -12,6 +10,8 @@ from machine import Pin, I2C
 import ssd1306, neopixel
 import bsides_logo
 import math
+from badge_config import hardware_for, load_badge_config, save_badge_config
+from battery import estimate_soc, read_battery_voltage
 
 # Writer
 from writer.writer import Writer
@@ -27,6 +27,11 @@ I2C_SDA = 0
 OLED_WIDTH = 128
 OLED_HEIGHT = 64
 
+badge_config = load_badge_config()
+BADGE_VERSION = badge_config["badge_version"]
+HARDWARE = hardware_for(BADGE_VERSION)
+OLED_ADDRESS = HARDWARE["oled_address"]
+
 NEOPIXEL_PIN = 3
 NEOPIXEL_COUNT = 16
 NEOPIXEL_FPS = 50
@@ -34,7 +39,7 @@ NEOPIXEL_FPS = 50
 # Buttons
 BTN_NEXT_PIN = 5      # Next / Increase
 BTN_PREV_PIN = 8      # Previous / Decrease
-BTN_SELECT_PIN = 4    # Enter
+BTN_SELECT_PIN = HARDWARE["select_pin"]  # Enter
 BTN_BACK_PIN = 9      # Back
 DEBOUNCE_MS = 50
 
@@ -67,7 +72,8 @@ repeat_tasks = {}    # {btn_id: task}
 _last_event_ms = {}  # debounce tracking
 
 i2c_oled = I2C(0, scl=Pin(I2C_SCL), sda=Pin(I2C_SDA))
-oled = ssd1306.SSD1306_I2C(OLED_WIDTH, OLED_HEIGHT, i2c_oled)
+oled = ssd1306.SSD1306_I2C(OLED_WIDTH, OLED_HEIGHT, i2c_oled,
+                           addr=OLED_ADDRESS)
 wri6  = Writer(oled, font6, verbose=False)
 wri10 = Writer(oled, font10, verbose=False)
 wri20 = Writer(oled, freesans20, verbose=False)
@@ -98,7 +104,7 @@ led_sat        = Parameter("Saturation", 100, 100)
 led_speed      = Parameter("Speed", 30, 100)
 
 # -----------------------
-# JSON parameter storage
+# Badge configuration storage
 # -----------------------
 
 params = {
@@ -109,82 +115,26 @@ params = {
     "Light_effect" : led_effect
 }
 
-# --- Snake high score param (persistent in params.json) ---
+# --- Snake high score param (persistent in badge.json) ---
 snake_high_score = Parameter("SnakeHighScore", 0, 9999)
 params["SnakeHighScore"] = snake_high_score
 
-FILENAME = "params.json"
-
 def save_params():
-    data = {name: param.value for name, param in params.items()}
-    with open(FILENAME, "w") as f:
-        json.dump(data, f)
+    badge_config["params"] = {
+        name: param.value for name, param in params.items()
+    }
+    save_badge_config(badge_config)
 
 def load_params():
-    try:
-        with open(FILENAME, "r") as f:
-            data = json.load(f)
-            for name, val in data.items():
-                if name in params:
-                    params[name].value = val
-    except OSError:
-        # file not found, keep defaults
-        pass
+    for name, val in badge_config.get("params", {}).items():
+        if name in params:
+            params[name].value = val
 
 # -----------------------
 # Username and ID
 # -----------------------
-def load_username():
-    try:
-        with open("yourname.txt") as f:
-            return f.read().strip() or None
-    except OSError:
-        return None
-
-USERNAME = load_username()
-
-ID_FILENAME = "id.txt"
-
-def is_valid_hex_id(s):
-    """Check if s is a 12-character hex string (6 bytes)."""
-    if len(s) != 12:
-        return False
-    try:
-        int(s, 16)
-        return True
-    except ValueError:
-        return False
-
-def load_or_create_device_id():
-    device_id = None
-    need_create = True
-
-    # try to read existing ID
-    try:
-        with open(ID_FILENAME, "r") as f:
-            hex_str = f.read().strip().upper()
-            if is_valid_hex_id(hex_str):
-                device_id = hex_str
-                need_create = False
-    except OSError:
-        pass  # file does not exist
-
-    if need_create:
-        # generate new 6-byte ID
-        random_bytes = bytes([urandom.getrandbits(8) for _ in range(6)])
-        hex_str = ubinascii.hexlify(random_bytes).decode().upper()
-        device_id = hex_str
-
-        # store to file
-        try:
-            with open(ID_FILENAME, "w") as f:
-                f.write(device_id)
-        except OSError:
-            pass  # handle write error
-
-    return device_id
-
-device_id = load_or_create_device_id()
+USERNAME = badge_config.get("holder_name") or None
+device_id = badge_config["device_id"]
 print("Device ID: {}".format(device_id))
 # -----------------------
 # Hardware init
@@ -491,6 +441,47 @@ class StopwatchScreen(Screen):
     _paused_base = 0
 
 
+class StatusScreen(Screen):
+    def _fit(self, text):
+        while text and wri6.stringlen(text) > self.oled.width:
+            text = text[:-1]
+        return text
+
+    def render(self):
+        self.oled.fill(0)
+        # The small Writer font is 14 pixels high, despite its historical
+        # filename. Use the framebuffer's 8-pixel font for the heading so all
+        # four 2026 status rows fit without trying to start a row at y=64.
+        self.oled.text("Status", 0, 0, 1)
+
+        lines = [
+            "ID: {}".format(device_id),
+            "HW: {}".format(BADGE_VERSION),
+            "Git: {}".format(badge_config.get("git_commit", "unknown")),
+        ]
+        battery_pin = HARDWARE.get("battery_pin")
+        if battery_pin is not None:
+            try:
+                voltage = read_battery_voltage(battery_pin)
+                lines.append("Bat: {:.2f}V ~{}%".format(
+                    voltage, estimate_soc(voltage)))
+            except Exception as exc:
+                print("Battery read failed:", exc)
+                lines.append("Bat: read error")
+
+        y = 8
+        for line in lines:
+            wri6.set_textpos(self.oled, y, 0)
+            wri6.printstring(self._fit(line))
+            y += wri6.font.height()
+        self.oled.show()
+
+    async def handle_button(self, btn):
+        if btn in (BTN_SELECT, BTN_BACK):
+            return BadgeScreen(self.oled)
+        return self
+
+
 utils_screens = [("Stopwatch", StopwatchScreen)]
 
 class UtilsScreen(ListScreen):
@@ -534,12 +525,12 @@ class FetchNameScreen(Screen):
                 name = await self._fetch_name()
                 self.message = f"Name: {name}"
                 self.render()
-                # Reset name lines and store to yourname.txt
+                # Reset name lines and store in badge.json.
                 USERNAME = name
                 username_lines = None
                 try:
-                    with open("yourname.txt", "w") as f:
-                        f.write(name)
+                    badge_config["holder_name"] = name
+                    save_badge_config(badge_config)
                 except OSError as e:
                     self.message += f" (save error: {e})"
                     self.render()
@@ -669,7 +660,8 @@ class CodeRepoScreen(Screen):
 
         self.oled.show()
 
-badge_screens = [("Fetch Name", FetchNameScreen),
+badge_screens = [("Status", StatusScreen),
+                 ("Fetch Name", FetchNameScreen),
                  ("Code git", CodeRepoScreen)]
 
 class BadgeScreen(ListScreen):
