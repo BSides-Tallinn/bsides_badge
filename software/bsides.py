@@ -3,13 +3,9 @@
 import sys
 import os
 import gc
-import network
-import socket
-import ssl
-import json
 import uasyncio as asyncio
 import time, micropython
-from machine import Pin, I2C
+from machine import Pin, I2C, RTC
 import ssd1306
 import bsides_logo
 import rgb_leds
@@ -50,9 +46,6 @@ REPEAT_INTERVAL = 10  # ms between repeats
 INACTIVITY_TIMEOUT = 5000  # ms
 LOGO_PERIOD = 3000  # ms
 
-SSID = "bsides-badge"
-PASSWORD = "bsidestallinn"
-URL = "https://badge.bsides.ee"
 URL_QR = "badge.bsides.ee"
 
 # -----------------------
@@ -496,121 +489,29 @@ class FetchNameScreen(Screen):
         self.oled = oled
         self.index = 0  # only one item
         self.message = ""  # status message to display
-        self.wlan = None
+        self.fetch_task = None
 
     async def handle_button(self, btn):
-        global username_lines, USERNAME
-        if btn == BTN_SELECT:
-            self.message = "Connecting WiFi..."
-            self.render()
-            try:
-                await self._connect_wifi()
-            except Exception as e:
-                self.message = f"WiFi error: {e}"
-                self.render()
-                return self
-
-            self.message = "Fetching name..."
-            self.render()
-            try:
-                name = await self._fetch_name()
-                self.message = f"Name: {name}"
-                self.render()
-                # Reset name lines and store in badge.json.
-                USERNAME = name
-                username_lines = None
-                try:
-                    badge_config["holder_name"] = name
-                    save_badge_config(badge_config)
-                except OSError as e:
-                    self.message += f" (save error: {e})"
-                    self.render()
-            except Exception as e:
-                self.message = f"Fetch error: {e}"
-                self.render()
-        elif btn == BTN_BACK:
-            await self._disconnect_wifi()
+        if btn == BTN_BACK:
+            self._cancel_fetch()
             return BadgeScreen(oled)
+        if btn == BTN_SELECT and self.fetch_task is None:
+            self.fetch_task = asyncio.create_task(self._run_fetch())
 
         return self
 
-    async def _connect_wifi(self):
-        # Logo modules contain large bytearrays. Make sure none remain cached
-        # before the Wi-Fi driver allocates its buffers.
-        unload_sponsor_logos()
-        if not self.wlan:
-            self.wlan = network.WLAN(network.STA_IF)
-        self.wlan.active(True)
-        if not self.wlan.isconnected():
-            self.wlan.connect(SSID, PASSWORD)
-            for _ in range(20):  # wait up to ~10 seconds
-                await asyncio.sleep(0.5)
-                if self.wlan.isconnected():
-                    return
-            raise RuntimeError("Could not connect to WiFi")
+    async def _run_fetch(self):
+        self.message = "Starting secure fetch..."
+        self.render()
+        RTC().memory(b"wifi_fetch")
+        await asyncio.sleep_ms(100)
+        import machine
+        machine.reset()
 
-    async def _disconnect_wifi(self):
-        if not self.wlan:
-            return
-        try:
-            self.wlan.disconnect()
-        except OSError:
-            pass
-        for _ in range(20):  # up to ~10 seconds
-            if not self.wlan.isconnected():
-                break
-            await asyncio.sleep(0.5)
-        self.wlan.active(False)
-
-    async def _fetch_name(self):
-        # parse URL
-        proto, rest = URL.split("://", 1)
-        if "/" in rest:
-            host, base_path = rest.split("/", 1)
-            base_path = "/" + base_path
-        else:
-            host, base_path = rest, ""
-
-        port = 443 if proto == "https" else 80
-
-        # resolve host
-        addr_info = socket.getaddrinfo(host, port)
-        addr = addr_info[0][-1]
-        s = socket.socket()
-        s.connect(addr)
-
-        if proto == "https":
-            s = ssl.wrap_socket(s, server_hostname=host)
-
-        path = base_path + "/getname/" + device_id
-        req = "GET {} HTTP/1.0\r\nHost: {}\r\n\r\n".format(path, host)
-        s.send(req.encode())
-
-        # read response
-        resp = b""
-        while True:
-            data = s.recv(512)
-            if not data:
-                break
-            resp += data
-        s.close()
-
-        # extract body
-        body = resp.split(b"\r\n\r\n", 1)[-1]
-        try:
-            data = json.loads(body)
-        except ValueError:
-            raise RuntimeError("Invalid JSON")
-
-        # Check for error
-        if "error" in data:
-            raise RuntimeError("{}".format(data.get("error","")))
-
-        # compare IDs case-insensitively
-        if data.get("id", "").upper() != device_id.upper() or "name" not in data:
-            raise RuntimeError("Unexpected response")
-
-        return data["name"].strip()
+    def _cancel_fetch(self):
+        if self.fetch_task:
+            self.fetch_task.cancel()
+            self.fetch_task = None
 
     def render(self):
         self.oled.fill(0)

@@ -52,6 +52,20 @@ Open **Menu -> Badge -> Status** to see the ID, hardware version, uploaded git
 commit and branch. A 2026 badge also shows battery voltage and approximate state
 of charge.
 
+When **Menu -> Badge setup -> Fetch Name** is selected, the badge connects to
+Wi-Fi, synchronizes its RTC from NTP, and briefly displays the resulting UTC
+date and time. It then verifies `badge.bsides.ee` using the bundled ISRG Root X1
+certificate before requesting the name. The fetch runs in a lightweight mode
+so mbedTLS has enough contiguous memory to validate the complete certificate
+chain. NTP failures and TLS certificate or hostname validation failures stop
+the request and are shown on the display.
+While this procedure is running, BACK cancels it, turns off Wi-Fi, and returns
+to the badge menu. The DHCP hostname advertised to the router is
+`bsides26-<device ID>`.
+After a Wi-Fi, NTP, TLS connection, or certificate failure, SELECT or NEXT
+retries the procedure from the Wi-Fi connection stage without leaving the
+special Fetch Name mode. BACK still exits from the error screen.
+
 ## Badge management tool
 
 Use Python 3.10 or newer on Windows, Linux, or macOS. One Python tool is used so

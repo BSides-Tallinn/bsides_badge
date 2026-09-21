@@ -90,6 +90,8 @@ class BadgeToolTests(unittest.TestCase):
                  for path in badge_tool.upload_files()}
         self.assertIn("main.py", files)
         self.assertIn("lib/ssd1306.py", files)
+        self.assertIn("certs/isrg-root-x1.pem", files)
+        self.assertIn("wifi_fetch.py", files)
         self.assertNotIn("badge.json", files)
         self.assertFalse(any("__pycache__" in path or path.endswith(".pyc") for path in files))
 
