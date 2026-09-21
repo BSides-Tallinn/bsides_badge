@@ -80,7 +80,9 @@ python scripts/badge.py flash --badge-version 2026
 
 When reachable before erasing, the tool preserves the badge ID, holder name,
 and saved parameters. Add `--holder-name "Ada Lovelace"` to set the name during
-either `flash` or `upload`.
+either `flash` or `upload`. Add `--wipe` to either command to skip reading and
+preserving existing settings. This saves time when flashing a brand-new or
+already empty badge and creates `badge.json` from the repository defaults.
 
 Upload only application files:
 
@@ -105,10 +107,11 @@ pass `--port COM4`, `--port /dev/ttyACM0`, or the relevant macOS
 `/dev/cu.usbmodem*` path after the command name. Upload and name operations check
 the installed MicroPython version against the latest stable release by default;
 use `--skip-version-check` only when working offline. `__pycache__` directories,
-`*.pyc`, `requirements.txt`, and the template `software/badge.json` are never
-copied as ordinary files. Instead, the tool generates `badge.json`, preserving
-device settings and adding the selected hardware version plus the current
-eight-character git hash and branch.
+`*.pyc`, `.DS_Store`, `requirements.txt`, and the template
+`software/badge.json` are never copied as ordinary files. Instead, the tool
+generates `badge.json`, preserving device settings unless `--wipe` is used and
+adding the selected hardware version plus the current eight-character git hash
+and branch.
 
 If `mpremote` cannot interrupt the running application, hold SELECT while
 resetting or power-cycling the badge. The correct SELECT pin is chosen from

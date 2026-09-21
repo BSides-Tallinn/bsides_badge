@@ -93,6 +93,21 @@ class BadgeToolTests(unittest.TestCase):
         self.assertNotIn("badge.json", files)
         self.assertFalse(any("__pycache__" in path or path.endswith(".pyc") for path in files))
 
+    def test_upload_filter_excludes_macos_metadata_and_requirements(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            software_dir = Path(temp_dir)
+            (software_dir / ".DS_Store").write_bytes(b"metadata")
+            (software_dir / "requirements.txt").write_text(
+                "mpremote\n", encoding="utf-8")
+            nested = software_dir / "games"
+            nested.mkdir()
+            (nested / ".DS_Store").write_bytes(b"metadata")
+            (nested / "game.py").write_text("pass\n", encoding="utf-8")
+            with patch.object(badge_tool, "SOFTWARE_DIR", software_dir):
+                files = {path.relative_to(software_dir).as_posix()
+                         for path in badge_tool.upload_files()}
+            self.assertEqual(files, {"games/game.py"})
+
     def test_clean_bytecode_cache(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             software_dir = Path(temp_dir)
@@ -119,11 +134,13 @@ class BadgeToolTests(unittest.TestCase):
             badge_tool.upload_tree("/dev/ttyACM0", {})
         copy_commands = [call.args[0] for call in run.call_args_list
                          if "cp" in call.args[0]]
-        self.assertEqual(copy_commands, [[
-            "mpremote", "fs", "cp", "-r",
-            str(badge_tool.SOFTWARE_DIR / "games"),
-            str(badge_tool.SOFTWARE_DIR / "main.py"), ":",
-        ]])
+        self.assertEqual(len(copy_commands), 1)
+        self.assertEqual(copy_commands[0][:4], ["mpremote", "fs", "cp", "-r"])
+        self.assertEqual([Path(path).name for path in copy_commands[0][4:-1]],
+                         ["games", "main.py"])
+        self.assertEqual(copy_commands[0][-1], ":")
+        self.assertTrue(all(Path(path).parent != badge_tool.SOFTWARE_DIR
+                            for path in copy_commands[0][4:-1]))
         remove_commands = [call.args[0] for call in run.call_args_list
                            if "rm" in call.args[0]]
         self.assertIn(["mpremote", "fs", "rm", ":/bsides25.py"],
@@ -142,6 +159,26 @@ class BadgeToolTests(unittest.TestCase):
         self.assertEqual(result["holder_name"], "Ada")
         self.assertEqual(result["badge_version"], "2026")
         self.assertEqual(result["params"]["Brightness"], 42)
+
+    @patch.object(badge_tool, "read_remote_config")
+    def test_wipe_skips_reading_existing_config(self, read_remote_config):
+        self.assertEqual(badge_tool.existing_config("/dev/cu.usbmodem1", True), {})
+        read_remote_config.assert_not_called()
+
+        read_remote_config.return_value = {"holder_name": "Ada"}
+        self.assertEqual(
+            badge_tool.existing_config("/dev/cu.usbmodem1", False),
+            {"holder_name": "Ada"},
+        )
+        read_remote_config.assert_called_once_with("/dev/cu.usbmodem1")
+
+    def test_wipe_option_is_available_for_upload_and_flash(self):
+        parser = badge_tool.build_parser()
+        for command in ("upload", "flash"):
+            with self.subTest(command=command):
+                args = parser.parse_args([
+                    command, "--badge-version", "2026", "--wipe"])
+                self.assertTrue(args.wipe)
 
 
 if __name__ == "__main__":

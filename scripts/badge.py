@@ -25,7 +25,7 @@ SOFTWARE_DIR = ROOT / "software"
 DEFAULT_FIRMWARE_DIR = ROOT / ".cache" / "firmware"
 DOWNLOAD_PAGE = "https://micropython.org/download/ESP32_GENERIC_C3/"
 SUPPORTED_BADGES = ("2025_prototype", "2025", "2026")
-SKIPPED_NAMES = {"badge.json"}
+SKIPPED_NAMES = {".ds_store", "badge.json", "requirements.txt"}
 LEGACY_FILES = ("params.json", "id.txt", "yourname.txt")
 OBSOLETE_FILES = ("bsides25.py",)
 
@@ -193,6 +193,11 @@ def read_remote_config(port: str | None) -> dict[str, Any]:
     return config
 
 
+def existing_config(port: str | None, wipe: bool) -> dict[str, Any]:
+    """Read settings to preserve unless a fresh configuration was requested."""
+    return {} if wipe else read_remote_config(port)
+
+
 def git_commit_info() -> str:
     try:
         commit = subprocess.run(
@@ -256,9 +261,18 @@ def clean_bytecode_cache() -> int:
     return len(caches) + len(bytecode)
 
 
-def upload_entries(files: list[Path]) -> list[Path]:
+def upload_entries(files: list[Path], root: Path = SOFTWARE_DIR) -> list[Path]:
     names = {path.relative_to(SOFTWARE_DIR).parts[0] for path in files}
-    return [SOFTWARE_DIR / name for name in sorted(names)]
+    return [root / name for name in sorted(names)]
+
+
+def stage_upload_files(files: list[Path], root: Path) -> list[Path]:
+    """Copy approved files into an isolated tree for recursive upload."""
+    for source in files:
+        destination = root / source.relative_to(SOFTWARE_DIR)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+    return upload_entries(files, root)
 
 
 def check_firmware_version(port: str | None, latest: Firmware) -> bool:
@@ -324,10 +338,11 @@ def upload_tree(port: str | None, config: dict[str, Any]) -> str | None:
     if removed:
         print("Removed {} Python cache entries.".format(removed))
     files = upload_files()
-    entries = upload_entries(files)
-    if entries:
-        run(mpremote_prefix(port) + ["fs", "cp", "-r"]
-            + [str(path) for path in entries] + [":"])
+    with tempfile.TemporaryDirectory(prefix="bsides-badge-upload-") as temp_dir:
+        entries = stage_upload_files(files, Path(temp_dir))
+        if entries:
+            run(mpremote_prefix(port) + ["fs", "cp", "-r"]
+                + [str(path) for path in entries] + [":"])
     write_remote_config(port, config)
 
     for stale_file in LEGACY_FILES + OBSOLETE_FILES:
@@ -357,7 +372,7 @@ def command_upload(args: argparse.Namespace) -> str | None:
     version = require_badge_version(args.badge_version)
     port = detect_port(args.port)
     maybe_check_firmware(port, args.skip_version_check)
-    remote = read_remote_config(port)
+    remote = existing_config(port, args.wipe)
     config = merge_config(remote, version, args.holder_name, not args.no_git_info)
     return upload_tree(port, config)
 
@@ -368,7 +383,7 @@ def command_flash(args: argparse.Namespace) -> str | None:
     firmware = latest_firmware()
     image = download_firmware(firmware, args.firmware_dir)
     port = detect_port(args.port)
-    remote = read_remote_config(port)
+    remote = existing_config(port, args.wipe)
     config = merge_config(remote, version, args.holder_name, not args.no_git_info)
 
     esptool = tool_command("esptool")
@@ -437,7 +452,10 @@ def add_connection_options(parser: argparse.ArgumentParser, *, version: bool = F
 def add_metadata_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--holder-name", help="also set the holder name")
     parser.add_argument("--no-git-info", action="store_true",
-                        help="preserve existing git info instead of writing HEAD")
+                        help="keep existing/default git info instead of writing HEAD")
+    parser.add_argument(
+        "--wipe", action="store_true",
+        help="skip existing settings and create badge.json from defaults")
 
 
 def build_parser() -> argparse.ArgumentParser:
