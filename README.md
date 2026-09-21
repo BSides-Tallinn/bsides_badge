@@ -40,7 +40,8 @@ Runtime settings are stored in `/badge.json` on the badge:
     "Light_effect": 0,
     "SnakeHighScore": 0,
     "PacmanHighScore": 0,
-    "TetrisHighScore": 0
+    "TetrisHighScore": 0,
+    "FlappyHighScore": 0
   }
 }
 ```
@@ -141,8 +142,8 @@ currently measured battery voltage as its final output line. It adds
 ## Games
 
 Open **Menu -> Games** to select an installed game. The menu discovers Python
-files in `software/games` at runtime. Pacman, Snake, Tetris, and two-player Pong
-are included.
+files in `software/games` at runtime. Flappy Bird, Pacman, Snake, Tetris, and
+two-player Pong are included.
 
 To add a game, place a `.py` file in `software/games`. It must export:
 
@@ -154,6 +155,19 @@ GameScreen = MyGameScreen
 `GameScreen(oled)` must provide `render()` and async `handle_button(btn)`
 methods. Set `manages_own_render = True` when the game owns an animation loop.
 On exit, return `bsides.GamesScreen(oled)`.
+
+### Flappy Bird
+
+Fly through the gaps between scrolling pipes. Each pipe passed scores one
+point, and the gaps narrow as the score rises. Touching a pipe or the ground
+ends the run; the top of the playfield is safe.
+
+- SELECT or NEXT flaps. The first flap starts the run. Holding NEXT does not
+  repeat.
+- PREV pauses and resumes. A flap also resumes.
+- BACK exits to the Games menu. SELECT restarts after game over.
+
+The high score is stored as `FlappyHighScore` in `badge.json`.
 
 ### Pacman
 

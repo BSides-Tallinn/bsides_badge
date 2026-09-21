@@ -35,6 +35,7 @@ DEFAULT_PARAMS = {
     "SnakeHighScore": 0,
     "PacmanHighScore": 0,
     "TetrisHighScore": 0,
+    "FlappyHighScore": 0,
 }
 
 

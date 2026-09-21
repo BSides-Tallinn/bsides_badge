@@ -11,6 +11,7 @@
     "Light_effect": 0,
     "SnakeHighScore": 0,
     "PacmanHighScore": 0,
-    "TetrisHighScore": 0
+    "TetrisHighScore": 0,
+    "FlappyHighScore": 0
   }
 }
