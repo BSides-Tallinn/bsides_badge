@@ -1,55 +1,123 @@
-# BSides 25 badge
+# BSides Tallinn badge
 
-## Hardware
+MicroPython firmware and hardware documentation for the ESP32-C3 BSides Tallinn
+badge.
 
-ESP32-C3FH4 (4MB flash) with WiFi and Bluetooth
+## Supported hardware
 
-128x64 px OLED display (SSD1306)
+| Badge version | OLED address | SELECT | Battery measurement |
+| --- | --- | --- | --- |
+| `2025_prototype` | `0x3D` | GPIO4 | No |
+| `2025` | `0x3C` | GPIO4 | No |
+| `2026` | `0x3C` | GPIO10 | GPIO4 / ADC1_CH4 |
 
-16 WS2812B (Neopixel compatible) LEDs
+The 2026 battery input uses the schematic's 100 kΩ / 20 kΩ divider. The status
+screen multiplies the ADC voltage by six and estimates LiPo state of charge from
+a rough resting-voltage curve. Charging and LED load can make that percentage
+inaccurate.
 
-USB-C for flashing/charging
+- [2025 schematic](./hardware/BSides_2025_badge_v1.1_schematics.pdf)
+- [2026 schematic](./hardware/BSides_2026_badge_v1.2_schematics.pdf)
 
-[Schematics](./hardware/BSides_2025_badge_v1.1_schematics.pdf)
+Common hardware: ESP32-C3FH4 with 4 MB flash, 128x64 SSD1306 OLED, 16 WS2812B
+LEDs, Wi-Fi/Bluetooth, and USB-C flashing/charging.
 
-## Software
+## Badge configuration
 
-The code in `software` is written in MicroPython and loaded onto the badge via USB-C connector.
+Runtime settings are stored in `/badge.json` on the badge:
 
-Update the code by uploading via `mpremote` or directly via some IDE like [Thonny](https://thonny.org/).
-
-## Device preparation
-
-Install `esptool` and `mpremote`
+```json
+{
+  "badge_version": "2026",
+  "device_id": "A1B2C3D4E5F6",
+  "holder_name": "Badge Holder",
+  "git_commit": "0123abcd main",
+  "params": {
+    "Brightness": 10,
+    "Hue": 180,
+    "Saturation": 100,
+    "Speed": 30,
+    "Light_effect": 0,
+    "SnakeHighScore": 0
+  }
+}
 ```
-pip install --user esptool mpremote
+
+On first boot, firmware creates a random device ID when needed. Existing
+`params.json`, `id.txt`, and `yourname.txt` files are migrated into `badge.json`
+and removed. The upload tool also preserves those legacy values while upgrading
+an existing badge.
+
+Open **Menu -> Badge -> Status** to see the ID, hardware version, uploaded git
+commit and branch. A 2026 badge also shows battery voltage and approximate state
+of charge.
+
+## Badge management tool
+
+Use Python 3.10 or newer on Windows, Linux, or macOS. One Python tool is used so
+port detection, filtering, configuration migration, and release discovery stay
+consistent across platforms.
+
+Initialize the workstation. This installs missing `esptool` and `mpremote`
+packages and downloads the newest stable `ESP32_GENERIC_C3` MicroPython image:
+
+```console
+python scripts/badge.py init
 ```
 
-Install [MicroPython](https://micropython.org/download/ESP32_GENERIC_C3).
+Erase the chip, flash that image, and upload the application:
 
-For BSides 2025: v1.26.1 (2025-09-11)
-```
-wget https://micropython.org/resources/firmware/ESP32_GENERIC_C3-20250911-v1.26.1.bin
-esptool --port <port> erase_flash
-esptool --port <port> --baud 921600 write_flash 0 ESP32_GENERIC_C3-20250911-v1.26.1.bin
+```console
+python scripts/badge.py flash --badge-version 2026
 ```
 
-## Copy files to the badge
+When reachable before erasing, the tool preserves the badge ID, holder name,
+and saved parameters. Add `--holder-name "Ada Lovelace"` to set the name during
+either `flash` or `upload`.
 
-```
-mpremote <port> fs cp -r software/* :/
+Upload only application files:
+
+```console
+python scripts/badge.py upload --badge-version 2025
 ```
 
-If the code is already running on the badge and `mpremote` does not connect, hold `SELECT` button down while resetting your badge (press `RESET` button or toggling ON/OFF switch).
+Set or change the holder's name:
+
+```console
+python scripts/badge.py name "Ada Lovelace"
+```
+
+Delete every file from the MicroPython filesystem (not recoverable):
+
+```console
+python scripts/badge.py delete
+```
+
+The tool auto-detects a likely ESP32 serial port. If detection is ambiguous,
+pass `--port COM4`, `--port /dev/ttyACM0`, or the relevant macOS
+`/dev/cu.usbmodem*` path after the command name. Upload and name operations check
+the installed MicroPython version against the latest stable release by default;
+use `--skip-version-check` only when working offline. `__pycache__` directories,
+`*.pyc`, `requirements.txt`, and the template `software/badge.json` are never
+copied as ordinary files. Instead, the tool generates `badge.json`, preserving
+device settings and adding the selected hardware version plus the current
+eight-character git hash and branch.
+
+If `mpremote` cannot interrupt the running application, hold SELECT while
+resetting or power-cycling the badge. The correct SELECT pin is chosen from
+`badge.json` on both 2025 and 2026 hardware.
+
+Run `python scripts/badge.py --help` or a subcommand with `--help` for all
+options. After a successful operation on a 2026 badge, the tool prints the
+currently measured battery voltage as its final output line. It adds
+`WARNING!!` when the voltage is below 3.8 V or above 4.2 V.
 
 ## Games
 
-Open **Menu -> Games** to select one of the games installed on the badge.
-The menu is populated at runtime from Python files in `software/games`, so the
-main application does not contain a hard-coded list of games. Snake and Pong
-are included.
+Open **Menu -> Games** to select an installed game. The menu discovers Python
+files in `software/games` at runtime. Snake and two-player Pong are included.
 
-To add a game, copy one `.py` file into `software/games`. The module must export:
+To add a game, place a `.py` file in `software/games`. It must export:
 
 ```python
 GAME_NAME = "My game"
@@ -57,27 +125,18 @@ GameScreen = MyGameScreen
 ```
 
 `GameScreen(oled)` must provide `render()` and async `handle_button(btn)`
-methods. Set `manages_own_render = True` when the game runs and renders from
-its own async loop. On exit, return `bsides25.GamesScreen(oled)`.
+methods. Set `manages_own_render = True` when the game owns an animation loop.
+On exit, return `bsides25.GamesScreen(oled)`.
 
-### Pong (2-player)
+### Pong link
 
-Two badges can play Pong against each other over the UART link (hardware UART1 on the UART pads, chip pins 27/28 = GPIO20/GPIO21).
+Pong uses UART1 on GPIO20/GPIO21. Cross-connect TX to RX in both directions and
+connect GND between badges:
 
-Wiring between the badges (crossed):
 - Badge A TX (pin 28) -> Badge B RX (pin 27)
 - Badge B TX (pin 28) -> Badge A RX (pin 27)
-- Common GND
+- Badge A GND -> Badge B GND
 
-On both badges open Menu -> Games -> Pong. The badges handshake automatically
-and the higher device ID becomes host. They can enter Pong at different times;
-a badge waiting on the "No peer found" screen will accept a peer that arrives
-later. After a 3 s countdown a 60 s match starts; each player sees their own
-paddle on the left. NEXT moves the paddle up and SELECT moves it down; either
-button can be held to keep moving.
-When time is up, the badge with more goals wins. SELECT = rematch, BACK = exit.
-
-Headless link test on a PC (no badge needed):
-```
-python3 tests/test_pong.py
-```
+Open Pong on both badges. The higher device ID becomes host; after a three-second
+countdown, the match lasts 60 seconds. NEXT moves up, SELECT moves down, and
+BACK exits.
