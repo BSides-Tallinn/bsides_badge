@@ -156,7 +156,7 @@ currently measured battery voltage as its final output line. It adds
 
 Open **Menu -> Games** to select an installed game. The menu discovers Python
 files in `software/games` at runtime. Flappy Bird, Pacman, Snake, Tetris, and
-two-player Pong are included.
+the two-player games Pong and Tic-tac-toe are included.
 
 To add a game, place a `.py` file in `software/games`. It must export:
 
@@ -225,3 +225,27 @@ connect GND between badges:
 Open Pong on both badges. The higher device ID becomes host; after a three-second
 countdown, the match lasts 60 seconds. NEXT moves up, SELECT moves down, and
 BACK exits.
+
+### Tic-tac-toe link
+
+Tic-tac-toe is the second two-player game and uses the same cable as Pong: TX
+to RX in both directions plus GND. Open Tic-tac-toe on both badges. The higher
+device ID becomes host, owns the board, and plays X. The other badge plays O.
+The first game starts with X and the starter alternates after that.
+
+- NEXT and PREV move the blinking cursor to the next or previous empty cell.
+  A small dot shows where the other player's cursor is.
+- SELECT places your mark on your turn, and starts a new game once one is
+  finished. Either player can start the new game.
+- BACK exits.
+
+The side panel shows your mark, whose turn it is, and the session score as your
+wins against your losses.
+
+Every message carries a checksum, the host repeats the whole board a few times
+per second, and the guest repeats a move until the board shows it. A dropped or
+garbled line therefore cannot desynchronise the game. If the cable is
+unplugged, both badges show "Link lost" and resume the same game when it is
+plugged back in. If one badge leaves and reopens the game, a returning guest
+gets the board back, while a returning host starts a fresh game. Pong traffic
+on the other end is ignored, so both badges must run the same game.
