@@ -32,6 +32,7 @@ DEFAULT_PARAMS = {
     "Saturation": 100,
     "Speed": 30,
     "Light_effect": 0,
+    "Plugin_effect": 0,
     "SnakeHighScore": 0,
     "PacmanHighScore": 0,
     "TetrisHighScore": 0,

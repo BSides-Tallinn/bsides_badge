@@ -22,6 +22,11 @@ inaccurate.
 Common hardware: ESP32-C3FH4 with 4 MB flash, 128x64 SSD1306 OLED, 16 WS2812B
 LEDs, Wi-Fi/Bluetooth, and USB-C flashing/charging.
 
+On all badge versions, **Lights -> Plug-in -> Effects** controls the two plug-in LEDs
+on GPIO6 and GPIO7. **Breathe** (default), **Blink**, and **Police** run in
+opposite phases; **On** lights both LEDs and **Off** turns both off. The choice
+is saved when leaving Lights and is independent of the NeoPixel settings.
+
 ## Badge configuration
 
 Runtime settings are stored in `/badge.json` on the badge:
@@ -38,6 +43,7 @@ Runtime settings are stored in `/badge.json` on the badge:
     "Saturation": 100,
     "Speed": 30,
     "Light_effect": 0,
+    "Plugin_effect": 0,
     "SnakeHighScore": 0,
     "PacmanHighScore": 0,
     "TetrisHighScore": 0,

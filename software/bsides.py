@@ -94,6 +94,7 @@ led_brightness = Parameter("Brightness", 10, 100)
 led_hue        = Parameter("Hue", 180, 360)
 led_sat        = Parameter("Saturation", 100, 100)
 led_speed      = Parameter("Speed", 30, 100)
+plugin_effect = Parameter("Plugin_effect", 0, 4)
 
 # -----------------------
 # Badge configuration storage
@@ -104,7 +105,8 @@ params = {
     "Hue": led_hue,
     "Saturation": led_sat,
     "Speed": led_speed,
-    "Light_effect" : led_effect
+    "Light_effect" : led_effect,
+    "Plugin_effect": plugin_effect,
 }
 
 # --- Snake high score param (persistent in badge.json) ---
@@ -332,11 +334,39 @@ class EffectScreen(ListScreen):
     def on_back(self):
         return LightsScreen(self.oled)
 
+class PluginEffectScreen(ListScreen):
+    def __init__(self, oled):
+        import plugin_leds
+        super().__init__(oled, "Plug-in effects",
+                         [(name,) for name in plugin_leds.EFFECTS])
+        self.index = plugin_effect.value if plugin_effect.value in range(len(self.items)) else 0
+        self.offset = max(0, self.index - self.rows + 1)
+
+    def on_select(self, index):
+        plugin_effect.value = index
+        return self
+
+    def on_back(self):
+        return PluginScreen(self.oled)
+
+
+class PluginScreen(ListScreen):
+    def __init__(self, oled):
+        super().__init__(oled, "Plug-in", [("Effects", PluginEffectScreen)])
+
+    def on_select(self, index):
+        return self.items[index][1](self.oled)
+
+    def on_back(self):
+        return LightsScreen(self.oled)
+
+
 lights_screens = [("Effects", EffectScreen),
                   ("Brightness", BrightnessScreen),
                   ("Hue", HueScreen),
                   ("Saturation", SaturationScreen),
-                  ("Speed", SpeedScreen)]
+                  ("Speed", SpeedScreen),
+                  ("Plug-in", PluginScreen)]
 
 class LightsScreen(ListScreen):
     def __init__(self, oled):
@@ -899,10 +929,13 @@ async def main():
     show_bsides_logo(oled)
     print("Username: {}".format(USERNAME))
 
-    await asyncio.gather(
+    tasks = [
         ui_task(oled), inactivity_task(oled),
         rgb_leds.neopixel_task(
-            np, led_effect, led_brightness, led_hue, led_sat, led_speed))
+            np, led_effect, led_brightness, led_hue, led_sat, led_speed)]
+    import plugin_leds
+    tasks.append(plugin_leds.led_task(plugin_effect))
+    await asyncio.gather(*tasks)
 
 try:
     asyncio.run(main())
