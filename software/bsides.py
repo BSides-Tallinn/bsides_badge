@@ -95,6 +95,7 @@ led_hue        = Parameter("Hue", 180, 360)
 led_sat        = Parameter("Saturation", 100, 100)
 led_speed      = Parameter("Speed", 30, 100)
 plugin_effect = Parameter("Plugin_effect", 0, 4)
+game_lights_off = Parameter("GameLightsOff", 1, 1)
 
 # -----------------------
 # Badge configuration storage
@@ -107,6 +108,7 @@ params = {
     "Speed": led_speed,
     "Light_effect" : led_effect,
     "Plugin_effect": plugin_effect,
+    "GameLightsOff": game_lights_off,
 }
 
 # --- Snake high score param (persistent in badge.json) ---
@@ -596,7 +598,26 @@ class CodeRepoScreen(Screen):
 
         self.oled.show()
 
+class SettingsScreen(ListScreen):
+    def __init__(self, oled):
+        super().__init__(oled, "Settings", [self._lights_item()])
+
+    def _lights_item(self):
+        value = "Off" if game_lights_off.value else "On"
+        return ("Game lights: " + value,)
+
+    def on_select(self, index):
+        game_lights_off.value = 0 if game_lights_off.value else 1
+        self.items[0] = self._lights_item()
+        save_params()
+        return self
+
+    def on_back(self):
+        return BadgeScreen(self.oled)
+
+
 badge_screens = [("Status", StatusScreen),
+                 ("Settings", SettingsScreen),
                  ("Fetch Name", FetchNameScreen),
                  ("Code git", CodeRepoScreen)]
 
@@ -820,9 +841,14 @@ class MenuScreen(Screen):
 # UI manager
 # -----------------------
 screen = None
+game_active = False
+
+
+def mute_game_lights():
+    return bool(game_active and game_lights_off.value)
 
 async def ui_task(oled):
-    global screen
+    global screen, game_active
 
     while True:
         await button_event.wait()
@@ -830,7 +856,12 @@ async def ui_task(oled):
         btn = last_button
         if screen == None:
             screen = MenuScreen(oled)
+        previous = screen
         screen = await screen.handle_button(btn)
+        if isinstance(previous, GamesScreen):
+            game_active = not isinstance(screen, (GamesScreen, MenuScreen))
+        elif game_active and screen is not previous:
+            game_active = False
 
         # Games with their own animation loop render themselves.
         if not getattr(screen, "manages_own_render", False):
@@ -932,9 +963,10 @@ async def main():
     tasks = [
         ui_task(oled), inactivity_task(oled),
         rgb_leds.neopixel_task(
-            np, led_effect, led_brightness, led_hue, led_sat, led_speed)]
+            np, led_effect, led_brightness, led_hue, led_sat, led_speed,
+            mute_game_lights)]
     import plugin_leds
-    tasks.append(plugin_leds.led_task(plugin_effect))
+    tasks.append(plugin_leds.led_task(plugin_effect, mute_game_lights))
     await asyncio.gather(*tasks)
 
 try:

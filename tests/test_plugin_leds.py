@@ -80,6 +80,45 @@ class PluginLedTests(unittest.TestCase):
             self.assertEqual(led.levels, [65535, 0, 0])
             self.assertTrue(led.closed)
 
+    def test_game_mute_turns_off_both_channels_and_restores_them(self):
+        leds = []
+        class FakePWM:
+            def __init__(self, pin, **_kwargs):
+                self.levels = []
+                leds.append(self)
+
+            def duty_u16(self, value):
+                self.levels.append(value)
+
+            def deinit(self):
+                pass
+
+        muted = False
+        cycles = 0
+
+        async def sleep_ms(_delay):
+            nonlocal muted, cycles
+            cycles += 1
+            if cycles == 1:
+                muted = True
+            elif cycles == 3:
+                muted = False
+            elif cycles == 4:
+                raise asyncio.CancelledError()
+
+        with patch.object(plugin, "PWM", FakePWM), \
+                patch.object(plugin, "Pin", side_effect=lambda number, mode: number) as pin_mock, \
+                patch.object(plugin.time, "ticks_ms", return_value=0, create=True), \
+                patch.object(plugin.time, "ticks_diff", side_effect=lambda a, b: a-b, create=True), \
+                patch.object(plugin.asyncio, "sleep_ms", sleep_ms, create=True):
+            pin_mock.OUT = 1
+            with self.assertRaises(asyncio.CancelledError):
+                asyncio.run(plugin.led_task(types.SimpleNamespace(value=3),
+                                            lambda: muted))
+
+        for led in leds:
+            self.assertEqual(led.levels, [65535, 0, 0, 65535, 0])
+
 
 if __name__ == "__main__":
     unittest.main()

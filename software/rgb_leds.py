@@ -234,7 +234,8 @@ LED_EFFECTS = [
 ]
 
 
-async def neopixel_task(pixels, effect, brightness, hue, saturation, speed):
+async def neopixel_task(pixels, effect, brightness, hue, saturation, speed,
+                        lights_off=None):
     global led_effect, led_brightness, led_hue, led_sat, led_speed
     led_effect = effect
     led_brightness = brightness
@@ -245,7 +246,16 @@ async def neopixel_task(pixels, effect, brightness, hue, saturation, speed):
     state = None
     previous_effect = 0
     startup = True
+    muted = False
     while True:
+        if lights_off is not None and lights_off():
+            if not muted:
+                pixels.fill((0, 0, 0))
+                pixels.write()
+                muted = True
+            await asyncio.sleep_ms(1000 // NEOPIXEL_FPS)
+            continue
+        muted = False
         if startup:
             state = led_eff_startup(pixels, state)
             if state is None:

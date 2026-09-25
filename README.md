@@ -44,6 +44,7 @@ Runtime settings are stored in `/badge.json` on the badge:
     "Speed": 30,
     "Light_effect": 0,
     "Plugin_effect": 0,
+    "GameLightsOff": 1,
     "SnakeHighScore": 0,
     "PacmanHighScore": 0,
     "TetrisHighScore": 0,
@@ -60,6 +61,11 @@ an existing badge.
 Open **Menu -> Badge -> Status** to see the ID, hardware version, uploaded git
 commit and branch. A 2026 badge also shows battery voltage and approximate state
 of charge.
+
+Open **Menu -> Badge -> Settings** to toggle **Game lights**. It defaults to
+**Off**: entering any game turns off the NeoPixels and both plug-in LEDs, and
+leaving the game resumes the selected effects. The choice is saved in
+`badge.json`.
 
 When **Menu -> Badge setup -> Fetch Name** is selected, the badge connects to
 Wi-Fi, synchronizes its RTC from NTP, and briefly displays the resulting UTC

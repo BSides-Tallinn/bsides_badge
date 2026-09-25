@@ -68,6 +68,34 @@ class RgbLedTests(unittest.TestCase):
         self.assertEqual(pixels, [(0, 0, 0)] * rgb_leds.NEOPIXEL_COUNT)
         self.assertEqual(pixels.writes, 1)
 
+    def test_game_mute_clears_strip_once_and_restores_effect(self):
+        from unittest.mock import patch
+
+        pixels = FakeNeoPixel(3, 16)
+        muted = False
+        snapshots = []
+
+        async def sleep_ms(_delay):
+            nonlocal muted
+            snapshots.append((list(pixels), pixels.writes))
+            if len(snapshots) == 1:
+                muted = True
+            elif len(snapshots) == 3:
+                muted = False
+            elif len(snapshots) == 4:
+                raise asyncio.CancelledError()
+
+        with patch.object(rgb_leds.asyncio, "sleep_ms", sleep_ms, create=True):
+            with self.assertRaises(asyncio.CancelledError):
+                asyncio.run(rgb_leds.neopixel_task(
+                    pixels, Parameter(1, 10), Parameter(10), Parameter(180),
+                    Parameter(100), Parameter(30), lambda: muted))
+
+        self.assertTrue(any(color != (0, 0, 0) for color in snapshots[0][0]))
+        self.assertEqual(snapshots[1][0], [(0, 0, 0)] * 16)
+        self.assertEqual(snapshots[1][1], snapshots[2][1])
+        self.assertTrue(any(color != (0, 0, 0) for color in snapshots[3][0]))
+
     def test_ui_module_contains_no_led_effect_implementations(self):
         source = (ROOT / "software" / "bsides.py").read_text(encoding="utf-8")
         self.assertNotIn("def led_eff_", source)

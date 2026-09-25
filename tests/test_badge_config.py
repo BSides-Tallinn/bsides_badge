@@ -20,6 +20,9 @@ SPEC.loader.exec_module(badge_config)
 
 
 class BadgeConfigTests(unittest.TestCase):
+    def test_game_lights_default_off_during_games(self):
+        self.assertEqual(badge_config.default_config()["params"]["GameLightsOff"], 1)
+
     def test_longest_device_id_fits_builtin_oled_text_row(self):
         text = badge_config.format_device_id("FFFFFFFFFFFF")
         self.assertEqual(text, "ID:FFFFFFFFFFFF")

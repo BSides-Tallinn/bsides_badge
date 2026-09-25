@@ -31,7 +31,7 @@ def duties(effect, elapsed_ms):
     return first, MAX_DUTY - first
 
 
-async def led_task(effect):
+async def led_task(effect, lights_off=None):
     leds = []
     try:
         for pin in LED_PINS:
@@ -43,7 +43,10 @@ async def led_task(effect):
             if effect.value != previous:
                 previous = effect.value
                 started = now
-            levels = duties(effect.value, time.ticks_diff(now, started))
+            if lights_off is not None and lights_off():
+                levels = (0, 0)
+            else:
+                levels = duties(effect.value, time.ticks_diff(now, started))
             for led, level in zip(leds, levels):
                 led.duty_u16(level)
             await asyncio.sleep_ms(20)
