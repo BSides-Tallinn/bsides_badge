@@ -122,6 +122,10 @@ Upload only application files:
 python scripts/badge.py upload --badge-version 2026
 ```
 
+The `upload` command replaces the badge's entire `/logos` directory with the
+current sponsor set, so logos removed from the repository do not remain on the
+badge.
+
 Set or change the holder's name:
 
 ```console

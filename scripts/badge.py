@@ -275,6 +275,12 @@ def stage_upload_files(files: list[Path], root: Path) -> list[Path]:
     return upload_entries(files, root)
 
 
+def remove_remote_sponsor_logos(port: str | None) -> None:
+    """Remove the previous sponsor set so recursive copy cannot leave stale logos."""
+    run(mpremote_prefix(port) + ["fs", "rm", "-r", ":/logos"],
+        check=False, capture=True, timeout=20)
+
+
 def check_firmware_version(port: str | None, latest: Firmware) -> bool:
     code = (
         "import sys; v=sys.implementation.version; "
@@ -374,6 +380,7 @@ def command_upload(args: argparse.Namespace) -> str | None:
     maybe_check_firmware(port, args.skip_version_check)
     remote = existing_config(port, args.wipe)
     config = merge_config(remote, version, args.holder_name, not args.no_git_info)
+    remove_remote_sponsor_logos(port)
     return upload_tree(port, config)
 
 

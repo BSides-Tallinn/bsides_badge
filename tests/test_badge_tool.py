@@ -110,6 +110,14 @@ class BadgeToolTests(unittest.TestCase):
                          for path in badge_tool.upload_files()}
             self.assertEqual(files, {"games/game.py"})
 
+    @patch.object(badge_tool, "run")
+    @patch.object(badge_tool, "mpremote_prefix", return_value=["mpremote"])
+    def test_removes_remote_sponsor_logos_recursively(self, _prefix, run):
+        badge_tool.remove_remote_sponsor_logos("/dev/cu.usbmodem1")
+        run.assert_called_once_with(
+            ["mpremote", "fs", "rm", "-r", ":/logos"],
+            check=False, capture=True, timeout=20)
+
     def test_clean_bytecode_cache(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             software_dir = Path(temp_dir)
@@ -181,6 +189,22 @@ class BadgeToolTests(unittest.TestCase):
                 args = parser.parse_args([
                     command, "--badge-version", "2026", "--wipe"])
                 self.assertTrue(args.wipe)
+
+    @patch.object(badge_tool, "upload_tree", return_value=None)
+    @patch.object(badge_tool, "remove_remote_sponsor_logos")
+    @patch.object(badge_tool, "merge_config", return_value={})
+    @patch.object(badge_tool, "existing_config", return_value={})
+    @patch.object(badge_tool, "maybe_check_firmware")
+    @patch.object(badge_tool, "detect_port", return_value="COM10")
+    @patch.object(badge_tool, "ensure_tools")
+    def test_upload_replaces_sponsor_logos(
+            self, _ensure, _detect, _check, _existing, _merge,
+            remove_logos, _upload_tree):
+        args = Namespace(
+            badge_version="2026", port=None, skip_version_check=False,
+            wipe=False, holder_name=None, no_git_info=False)
+        badge_tool.command_upload(args)
+        remove_logos.assert_called_once_with("COM10")
 
 
 if __name__ == "__main__":
