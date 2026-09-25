@@ -234,7 +234,9 @@ connect GND between badges:
 
 Open Pong on both badges. The higher device ID becomes host; after a three-second
 countdown, the match lasts 60 seconds. NEXT moves up, SELECT moves down, and
-BACK exits.
+BACK exits. Pong resumes pairing automatically after a link interruption;
+reconnection starts a new match. Both badges need the same current Pong version
+because UART packets now include a checksum.
 
 ### Tic-tac-toe link
 

@@ -22,10 +22,14 @@ BTN_BACK = 4
 
 GAME_SECONDS = 60
 TICK_MS = 20          # physics tick
-RENDER_EVERY = 2      # render every N ticks (~25 fps)
+RENDER_MS = 60        # about 16 fps on the 2025 badge
+STATE_MS = 100        # host state, independent of render timing
+PADDLE_MS = 200       # guest heartbeat, independent of loop iterations
+PADDLE_CHANGE_MS = 50  # cap traffic while a paddle button is held
+HELLO_MS = 300
 COUNTDOWN_MS = 3000
 LINK_TIMEOUT_MS = 10000
-LOST_TIMEOUT_MS = 1500
+LOST_TIMEOUT_MS = 3500
 
 PADDLE_W = 2
 PADDLE_H = 12
@@ -38,6 +42,28 @@ BALL_SPEED_MAX = 2.4
 GAME_NAME = "Pong"
 
 
+def frame(payload):
+    """Mark Pong traffic and reject truncated or corrupted UART lines."""
+    data = b"Q" + payload
+    check = 0
+    for value in data:
+        check ^= value
+    return data + b"*%02X\n" % check
+
+
+def unframe(line):
+    if len(line) < 5 or line[:1] != b"Q" or line[-3:-2] != b"*":
+        return None
+    try:
+        expected = int(line[-2:], 16)
+    except ValueError:
+        return None
+    check = 0
+    for value in line[:-3]:
+        check ^= value
+    return line[1:-3] if check == expected else None
+
+
 class PongScreen:
     """
     Two-player Pong over the UART link. The badge with the higher device ID
@@ -45,7 +71,7 @@ class PongScreen:
     to the guest. The guest renders a mirrored view and streams its paddle
     position back. Each player sees their own paddle on the left.
     Controls:
-      NEXT/SELECT -> move paddle up/down (hold NEXT to keep moving)
+      NEXT/SELECT -> move paddle up/down (hold either to keep moving)
       SELECT    -> rematch (when finished) / retry (on link error)
       BACK      -> exit to menu
 
@@ -70,14 +96,16 @@ class PongScreen:
 
         self.uart = machine.UART(UART_ID, baudrate=UART_BAUD,
                                  tx=machine.Pin(UART_TX),
-                                 rx=machine.Pin(UART_RX), timeout=0)
+                                 rx=machine.Pin(UART_RX), timeout=0,
+                                 rxbuf=1024)
 
         self.running = True
         self.phase = "link"          # link/count/play/over/nolink/lost
         self.link_started = time.ticks_ms()
-        self.last_hello = 0
+        self.last_hello = time.ticks_add(self.link_started, -HELLO_MS)
         self.linked = False
         self.is_host = None
+        self.peer_id = None
         self.got_peer = False
 
         self.score_l = 0             # host-frame scores (host = left)
@@ -94,6 +122,9 @@ class PongScreen:
         self.play_start = 0
         self.last_rx = time.ticks_ms()
         self.last_sent_paddle = -1
+        self.last_paddle_tx = time.ticks_add(self.last_rx, -PADDLE_MS)
+        self.last_state_tx = time.ticks_add(self.last_rx, -STATE_MS)
+        self.last_render = time.ticks_add(self.last_rx, -RENDER_MS)
         self._dirty = True
 
         self._tasks = [asyncio.create_task(self._loop()),
@@ -105,7 +136,7 @@ class PongScreen:
         return max(self.pf_top, min(self.pf_bot - PADDLE_H + 1, y))
 
     def _send(self, msg):
-        self.uart.write(msg + b"\n")
+        self.uart.write(frame(msg))
 
     def _scores(self):
         if self.is_host:
@@ -204,15 +235,15 @@ class PongScreen:
 
     # ---------- main loop ----------
     async def _loop(self):
-        tick = 0
         try:
             while self.running:
                 now = time.ticks_ms()
-                if self.phase == "link":
-                    if time.ticks_diff(now, self.last_hello) >= 300:
+                if self.phase in ("link", "nolink", "lost"):
+                    if time.ticks_diff(now, self.last_hello) >= HELLO_MS:
                         self._send(b"H" + self.my_id.encode())
                         self.last_hello = now
-                    if time.ticks_diff(now, self.link_started) >= LINK_TIMEOUT_MS:
+                    if self.phase == "link" and \
+                            time.ticks_diff(now, self.link_started) >= LINK_TIMEOUT_MS:
                         self.phase = "nolink"
                         self._dirty = True
                 elif self.phase == "count":
@@ -224,31 +255,43 @@ class PongScreen:
                         self.phase = "play"
                         self.play_start = now
                         self.last_rx = now
+                        self.last_state_tx = time.ticks_add(now, -STATE_MS)
+                        self.last_paddle_tx = time.ticks_add(now, -PADDLE_MS)
                         if self.is_host:
                             self._serve()
                         self._dirty = True
                 elif self.phase == "play":
                     if self.is_host:
                         self._physics(now)
-                        if tick % RENDER_EVERY == 0:
+                        if self.phase == "play" and \
+                                time.ticks_diff(now, self.last_state_tx) >= STATE_MS:
                             self._send_state()
+                            self.last_state_tx = now
                     else:
                         if time.ticks_diff(now, self.last_rx) >= LOST_TIMEOUT_MS:
                             self.phase = "lost"
                             self._dirty = True
                 if self.phase in ("count", "play") and not self.is_host:
-                    if self.paddle_y != self.last_sent_paddle or tick % 25 == 0:
+                    if (self.paddle_y != self.last_sent_paddle and
+                            time.ticks_diff(now, self.last_paddle_tx) >= PADDLE_CHANGE_MS) or \
+                            time.ticks_diff(now, self.last_paddle_tx) >= PADDLE_MS:
                         self._send(b"P%d" % self.paddle_y)
                         self.last_sent_paddle = self.paddle_y
-                if self.phase in ("count", "play") and tick % RENDER_EVERY == 0:
+                        self.last_paddle_tx = now
+                if self.phase in ("count", "play") and \
+                        time.ticks_diff(now, self.last_render) >= RENDER_MS:
                     self._dirty = True
-                if self._dirty:
+                if self._dirty and (self.phase not in ("count", "play") or
+                                    time.ticks_diff(now, self.last_render) >= RENDER_MS):
                     self.render()
                     self._dirty = False
-                tick += 1
+                    self.last_render = now
                 await asyncio.sleep_ms(TICK_MS)
         except asyncio.CancelledError:
             return
+        except Exception as exc:
+            print("Pong loop stopped:", exc)
+            raise
 
     # ---------- UART receive ----------
     async def _rx(self):
@@ -260,7 +303,9 @@ class PongScreen:
                     buf += self.uart.read(n)
                     i = buf.find(b"\n")
                     while i >= 0:
-                        self._handle_line(buf[:i])
+                        payload = unframe(buf[:i])
+                        if payload is not None:
+                            self._handle_line(payload)
                         buf = buf[i + 1:]
                         i = buf.find(b"\n")
                     if len(buf) > 200:
@@ -268,23 +313,41 @@ class PongScreen:
                 await asyncio.sleep_ms(5)
         except asyncio.CancelledError:
             return
+        except Exception as exc:
+            print("Pong receive stopped:", exc)
+            raise
 
     def _handle_line(self, line):
-        self.last_rx = time.ticks_ms()
         if not line:
             return
         tag, rest = line[0:1], line[1:]
         if tag == b"H":
-            if self.phase in ("link", "nolink", "lost"):
+            try:
+                peer_id = rest.decode()
+                if len(peer_id) != 12:
+                    return
+                int(peer_id, 16)
+            except (UnicodeError, ValueError):
+                return
+            if peer_id == self.my_id or \
+                    (self.peer_id is not None and peer_id != self.peer_id):
+                return
+            if self.phase in ("link", "nolink", "lost") or \
+                    (self.phase == "play" and
+                     time.ticks_diff(time.ticks_ms(), self.play_start) > 1000):
                 # Reply before the host starts its countdown. Without this,
                 # the late-entering badge may only receive G, which it cannot
                 # accept until it has learned the host's ID from an H packet.
                 self._send(b"H" + self.my_id.encode())
                 self.linked = True
-                self.is_host = self.my_id > rest.decode()
+                self.peer_id = peer_id
+                self.is_host = self.my_id > peer_id
                 self.phase = "link"
                 self.link_started = time.ticks_ms()
+                self.last_rx = self.link_started
                 if self.is_host:
+                    self._reset_match()
+                    self.got_peer = False
                     self.phase = "count"
                     self.count_start = time.ticks_ms()
                     self._send(b"G")
@@ -296,24 +359,27 @@ class PongScreen:
                 self.count_start = time.ticks_ms()
                 self._dirty = True
         elif tag == b"P":
-            if self.is_host:
-                self.got_peer = True
+            if self.is_host and self.phase in ("count", "play"):
                 try:
                     self.op_y = self._clamp_paddle(int(rest))
                 except ValueError:
                     pass
+                else:
+                    self.got_peer = True
+                    self.last_rx = time.ticks_ms()
         elif tag == b"S":
             if not self.is_host and self.phase in ("play", "over"):
                 self._apply_state(rest)
         elif tag == b"E":
-            if not self.is_host:
+            if not self.is_host and self.phase == "play":
                 try:
                     l, r = rest.split(b",")
                     self.score_l, self.score_r = int(l), int(r)
                 except ValueError:
-                    pass
+                    return
                 self.time_left = 0
                 self.phase = "over"
+                self.last_rx = time.ticks_ms()
                 self._dirty = True
         elif tag == b"R":
             if self.is_host and self.phase == "over":
@@ -331,6 +397,7 @@ class PongScreen:
         self.op_y = self._clamp_paddle(hy)
         self.score_l, self.score_r = sl, sr
         self.time_left = t
+        self.last_rx = time.ticks_ms()
         self._dirty = True
 
     # ---------- drawing ----------
@@ -425,8 +492,9 @@ class PongScreen:
             self.phase = "link"
             self.linked = False
             self.is_host = None
+            self.peer_id = None
             self.link_started = time.ticks_ms()
-            self.last_hello = 0
+            self.last_hello = time.ticks_add(self.link_started, -HELLO_MS)
             self._dirty = True
         return self
 
