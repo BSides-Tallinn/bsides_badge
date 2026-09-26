@@ -210,10 +210,10 @@ def led_eff_police(pixels, oldstate):
     value = led_brightness.value / 100
     pixels.fill((0, 0, 0))
     if 0 <= phase < 25:
-        for index in range(1, half - 1):
+        for index in range(0, half):
             pixels[index] = hsv_to_rgb(0, saturation, value)
     elif 50 <= phase < 75:
-        for index in range(half + 1, count - 1):
+        for index in range(half, count):
             pixels[index] = hsv_to_rgb(240, saturation, value)
     state["phase"] = (phase + max(1, led_speed.value / 10)) % 100
     return state

@@ -101,6 +101,27 @@ class RgbLedTests(unittest.TestCase):
         self.assertNotIn("def led_eff_", source)
         self.assertNotIn("import neopixel", source)
 
+    def test_police_lights_full_half_with_no_dark_leds(self):
+        pixels = FakeNeoPixel(3, 16)
+        off = (0, 0, 0)
+
+        state = rgb_leds.led_eff_police(pixels, {"phase": 0})
+        red_half = list(pixels[0:8])
+        blue_half = list(pixels[8:16])
+        self.assertTrue(all(color != off for color in red_half),
+                        "all 8 red-half LEDs (0-7) should be lit, "
+                        "including the top-of-column LED at index 7")
+        self.assertTrue(all(color == off for color in blue_half))
+
+        pixels = FakeNeoPixel(3, 16)
+        rgb_leds.led_eff_police(pixels, {"phase": 50})
+        red_half = list(pixels[0:8])
+        blue_half = list(pixels[8:16])
+        self.assertTrue(all(color == off for color in red_half))
+        self.assertTrue(all(color != off for color in blue_half),
+                        "all 8 blue-half LEDs (8-15) should be lit, "
+                        "including the top-of-column LED at index 8")
+
 
 if __name__ == "__main__":
     unittest.main()
