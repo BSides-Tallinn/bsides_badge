@@ -27,6 +27,28 @@ on GPIO6 and GPIO7. **Breathe** (default), **Blink**, and **Police** run in
 opposite phases; **On** lights both LEDs and **Off** turns both off. The choice
 is saved when leaving Lights and is independent of the NeoPixel settings.
 
+## Firmware emulation
+
+The badge firmware can be executed without physical hardware using [Espressif ESP-EMU](https://github.com/espressif/esp-emulator).
+
+The emulation environment runs the ESP32-C3 MicroPython firmware and the application from `software/` using a merged flash image. Virtual peripherals reproduce the SSD1306 OLED, four navigation buttons and the circular array of 16 WS2812 RGB LEDs.
+
+The interactive terminal controller provides live OLED rendering, RGB LED visualisation, keyboard-based button interaction and device reset. Docker provides an isolated firmware build environment.
+
+The emulator is intended for application development, interactive testing, diagnostics and automated regression tests of the host tooling. It complements physical hardware testing rather than replacing it.
+
+See the [emulator documentation](./emulator/README.md) for installation, firmware generation, controller usage, performance measurements and testing instructions.
+
+### Emulator quick start (Linux/WSL2)
+
+```sh
+python scripts/badge.py emulator restore
+python scripts/badge.py emulator build
+python scripts/badge.py emulator run
+```
+
+In a second terminal run `python scripts/badge.py emulator controller`. Run all regression tests with `python scripts/badge.py test`.
+
 ## Badge configuration
 
 Runtime settings are stored in `/badge.json` on the badge:

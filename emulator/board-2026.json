@@ -1,0 +1,42 @@
+{
+  "parts": {
+    "oled": {
+      "module": "ssd1306.wasm",
+      "pins": {
+        "SCL": 1,
+        "SDA": 0
+      },
+      "addr": "0x3c"
+    },
+    "next": {
+      "module": "pushbutton.wasm",
+      "pins": {
+        "A": 5
+      }
+    },
+    "prev": {
+      "module": "pushbutton.wasm",
+      "pins": {
+        "A": 8
+      }
+    },
+    "back": {
+      "module": "pushbutton.wasm",
+      "pins": {
+        "A": 9
+      }
+    },
+    "select": {
+      "module": "pushbutton.wasm",
+      "pins": {
+        "A": 10
+      }
+    },
+    "rgb": {
+      "module": "ws2812.wasm",
+      "pins": {
+        "DIN": 3
+      }
+    }
+  }
+}

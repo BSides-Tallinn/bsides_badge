@@ -1,0 +1,16 @@
+/.gitattributes text eol=lf
+/Makefile text eol=lf
+/emulator/**/*.py text eol=lf
+/emulator/**/*.sh text eol=lf
+/emulator/**/*.json text eol=lf
+/emulator/**/*.md text eol=lf
+/emulator/Dockerfile text eol=lf
+/emulator/*.lock text eol=lf
+/emulator/*.pins text eol=lf
+/emulator/*.wasm binary
+/emulator/bin/** binary
+/emulator/.cache/** binary
+
+/software/**/*.py text eol=lf
+/software/**/*.json text eol=lf
+/software/**/*.pem text eol=lf

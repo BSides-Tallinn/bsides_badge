@@ -60,6 +60,14 @@ class BadgeToolTests(unittest.TestCase):
         self.assertEqual(print_mock.call_args_list[-1],
                          call("Battery voltage: 4.100 V"))
 
+    def test_emulator_build_value_error_is_reported_without_traceback(self):
+        from contextlib import redirect_stderr
+        from io import StringIO
+        from emulator import cli
+        with patch.object(cli, "build", side_effect=ValueError("Unknown firmware asset: sprite.bin")), redirect_stderr(StringIO()) as stderr:
+            self.assertEqual(badge_tool.main(["emulator", "build"]), 1)
+        self.assertEqual(stderr.getvalue(), "error: Unknown firmware asset: sprite.bin\n")
+
     @patch.object(badge_tool.shutil, "which")
     @patch.object(badge_tool.importlib.util, "find_spec")
     def test_tool_command_prefers_importable_module(self, find_spec, which):

@@ -1,5 +1,25 @@
+# Development artifacts
 .history
 .vscode
 .cache/
+
+# Emulator dependencies
+/emulator/*.wasm
+
+# Emulator runtime artifacts
+/emulator/*.jsonl
+/emulator/oled.png
+
+# Generated firmware
+/firmware-build/
+
+# Python artifacts
 __pycache__/
-*.pyc
+*.py[cod]
+.pytest_cache/
+.venv/
+
+/emulator/bin/
+/emulator/.cache/
+
+/emulator/.build.lock
