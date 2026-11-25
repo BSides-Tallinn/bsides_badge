@@ -497,15 +497,21 @@ def build_parser() -> argparse.ArgumentParser:
     name.add_argument("--skip-version-check", action="store_true")
     name.add_argument("--no-git-info", action="store_true")
     name.set_defaults(handler=command_name)
+    # The script directory is sys.path[0] when executed directly.
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from emulator.cli import add_commands
+    add_commands(subparsers)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    from emulator.cli import EmulatorError
     try:
         final_line = args.handler(args)
-    except (BadgeToolError, OSError, subprocess.CalledProcessError,
-            subprocess.TimeoutExpired) as exc:
+    except (BadgeToolError, EmulatorError, ValueError, OSError,
+            subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
         print("error: {}".format(exc), file=sys.stderr)
         return 1
     except KeyboardInterrupt:

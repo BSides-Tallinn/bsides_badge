@@ -1,0 +1,14 @@
+.git
+firmware-build/
+emulator/*.jsonl
+emulator/*.wasm
+emulator/parts/
+emulator/oled.png
+**/__pycache__/
+.pytest_cache/
+.venv/
+emulator/bin/
+emulator/.cache/
+
+.cache/
+**/.cache/

@@ -1,0 +1,14 @@
+argcomplete==3.8.0
+bitstring==5.0.0
+cffi==2.1.1
+cryptography==50.0.2
+ecdsa==0.19.2
+esptool==4.9.0
+intelhex==2.3.0
+littlefs-python==0.19.0
+pycparser==3.12
+pyserial==3.5
+PyYAML==6.0.4
+reedsolo==1.7.0
+six==1.17.0
+tibs==2.0.2

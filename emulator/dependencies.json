@@ -1,0 +1,30 @@
+{
+  "micropython": {
+    "version": "1.29.0",
+    "url": "https://micropython.org/resources/firmware/ESP32_GENERIC_C3-20260824-v1.29.0.bin",
+    "sha256": "bf72ed9eb88ad3a8f49d02c3d371f9ea34c90a8a303aeb9e324d8efd4a2a655a"
+  },
+  "esp_emu": {
+    "version": "1.2.0",
+    "release_url": "https://github.com/espressif/esp-emulator/releases/download/v1.2.0",
+    "platforms": {
+      "x86_64": {
+        "archive": "esp-emu-1.2.0-x86_64-unknown-linux-gnu.tar.gz",
+        "sha256": "560236344fd69dc8d74bc862c79aea01f7a69ac626ae3f54b1b0946bbce078c1"
+      },
+      "aarch64": {
+        "archive": "esp-emu-1.2.0-aarch64-unknown-linux-gnu.tar.gz",
+        "sha256": "5481a2840c6b521d57709d1f7cad03fbcfe9dbedafda28d7d2635d2cbbedabd5"
+      }
+    },
+    "examples": {
+      "archive": "esp-emu-1.2.0-examples.tar.gz",
+      "sha256": "2951a0f7596a2e622cd9c1f034d68fc21549da2614467bde0f4e52115d75fbcb"
+    },
+    "peripherals": [
+      "pushbutton.wasm",
+      "ssd1306.wasm",
+      "ws2812.wasm"
+    ]
+  }
+}
