@@ -43,9 +43,15 @@ See the [emulator documentation](./emulator/README.md) for installation, firmwar
 
 ```sh
 python scripts/badge.py emulator restore
-python scripts/badge.py emulator build
+python scripts/badge.py emulator build --badge-version 2026
 python scripts/badge.py emulator run
 ```
+
+This example selects the 2026 badge, with SELECT on GPIO10. The default build
+revision is `2025` (SELECT on GPIO4); use `--badge-version 2025` or
+`--badge-version 2025_prototype` for those revisions. Run selects the matching
+virtual board from the build metadata. Battery ADC and plug-in PWM LED
+emulation are not supported on any revision.
 
 In a second terminal run `python scripts/badge.py emulator controller`. Run all regression tests with `python scripts/badge.py test`.
 
