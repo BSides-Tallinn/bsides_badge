@@ -9,6 +9,7 @@ from machine import Pin, I2C, RTC
 import ssd1306
 import bsides_logo
 import rgb_leds
+import social_battery
 from badge_config import (
     format_device_id, hardware_for, load_badge_config, save_badge_config)
 from battery import estimate_soc, read_battery_voltage
@@ -45,6 +46,9 @@ REPEAT_INTERVAL = 10  # ms between repeats
 
 INACTIVITY_TIMEOUT = 5000  # ms
 LOGO_PERIOD = 3000  # ms
+SOCIAL_DIM_TIMEOUT_MS = 60000
+SOCIAL_DIM_CONTRAST = 32
+OLED_FULL_CONTRAST = 255
 
 URL_QR = "badge.bsides.ee"
 
@@ -96,6 +100,7 @@ led_sat        = Parameter("Saturation", 100, 100)
 led_speed      = Parameter("Speed", 30, 100)
 plugin_effect = Parameter("Plugin_effect", 0, 4)
 game_lights_off = Parameter("GameLightsOff", 1, 1)
+social_battery_level = social_battery.DEFAULT_LEVEL
 
 # -----------------------
 # Badge configuration storage
@@ -806,6 +811,42 @@ class GamesScreen(ListScreen):
     def on_back(self):
         return MenuScreen(self.oled)
 
+class SocialBatteryScreen(Screen):
+    """Show and adjust the social battery level held in RAM."""
+    def __init__(self, oled):
+        super().__init__(oled)
+        self.level = social_battery_level
+        self._rendered_level = None
+        self._dimmed = False
+
+    def render(self):
+        if self.level != self._rendered_level:
+            social_battery.draw_oled(self.oled, self.level)
+            self._rendered_level = self.level
+
+    def update_contrast(self, inactive_ms):
+        # Stay dimmed until interaction, even if the tick counter wraps.
+        if not self._dimmed and inactive_ms >= SOCIAL_DIM_TIMEOUT_MS:
+            self.oled.contrast(SOCIAL_DIM_CONTRAST)
+            self._dimmed = True
+
+    async def handle_button(self, btn):
+        global social_battery_level
+        if self._dimmed:
+            self.oled.contrast(OLED_FULL_CONTRAST)
+            self._dimmed = False
+        if btn == BTN_NEXT:
+            self.level = min(social_battery.MAX_LEVEL, self.level + 1)
+        elif btn == BTN_PREV:
+            self.level = max(social_battery.MIN_LEVEL, self.level - 1)
+        elif btn == BTN_BACK:
+            return MenuScreen(self.oled)
+        else:
+            return self
+        social_battery_level = self.level
+        return self
+
+
 class MenuScreen(Screen):
     items = [("About", AboutScreen),
              ("Sponsors", SponsorsScreen),
@@ -813,7 +854,8 @@ class MenuScreen(Screen):
              ("Utils", UtilsScreen),
              ("Lights", LightsScreen),
              ("Badge", BadgeScreen),
-             ("Games", GamesScreen)]
+             ("Games", GamesScreen),
+             ("Social", SocialBatteryScreen)]
 
     def __init__(self, oled):
         super().__init__(oled)
@@ -842,6 +884,25 @@ class MenuScreen(Screen):
 # -----------------------
 screen = None
 game_active = False
+
+
+_social_frame_level = None
+_social_frame_brightness = None
+_social_frame = None
+
+
+def social_battery_frame():
+    global _social_frame_level, _social_frame_brightness, _social_frame
+    if not isinstance(screen, SocialBatteryScreen):
+        return None
+    level = screen.level
+    brightness = led_brightness.value
+    if level != _social_frame_level or brightness != _social_frame_brightness:
+        _social_frame = social_battery.gauge_pixels(
+            level, rgb_leds.NEOPIXEL_COUNT, brightness)
+        _social_frame_level = level
+        _social_frame_brightness = brightness
+    return _social_frame
 
 
 def mute_game_lights():
@@ -933,7 +994,10 @@ async def inactivity_task(oled):
 
     while True:
         await asyncio.sleep_ms(500)
-        inactive = (screen == None or isinstance(screen, MenuScreen)) and time.ticks_diff(time.ticks_ms(), last_activity) > INACTIVITY_TIMEOUT
+        idle_ms = time.ticks_diff(time.ticks_ms(), last_activity)
+        if isinstance(screen, SocialBatteryScreen):
+            screen.update_contrast(idle_ms)
+        inactive = (screen == None or isinstance(screen, MenuScreen)) and idle_ms > INACTIVITY_TIMEOUT
         if inactive:
             now = time.ticks_ms()
             if time.ticks_diff(now, last_toggle) >= LOGO_PERIOD:
@@ -964,7 +1028,7 @@ async def main():
         ui_task(oled), inactivity_task(oled),
         rgb_leds.neopixel_task(
             np, led_effect, led_brightness, led_hue, led_sat, led_speed,
-            mute_game_lights)]
+            mute_game_lights, social_battery_frame)]
     import plugin_leds
     tasks.append(plugin_leds.led_task(plugin_effect, mute_game_lights))
     await asyncio.gather(*tasks)

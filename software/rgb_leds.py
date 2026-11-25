@@ -234,8 +234,33 @@ LED_EFFECTS = [
 ]
 
 
+class LedMode:
+    STARTUP = 0
+    EFFECT = 1
+    OVERRIDE = 2
+
+
+def _valid_override_frame(frame, count):
+    if type(frame) is not list or len(frame) != count:
+        return False
+    for color in frame:
+        if type(color) is not tuple or len(color) != 3:
+            return False
+        for channel in color:
+            if type(channel) is not int or not 0 <= channel <= 255:
+                return False
+    return True
+
+
 async def neopixel_task(pixels, effect, brightness, hue, saturation, speed,
-                        lights_off=None):
+                        lights_off=None, override_frame=None):
+    """Sole NeoPixel writer.
+
+    override_frame returns None or a list of RGB tuples, one per pixel.
+    Invalid frames are ignored. Valid frames contain integer channels in
+    0..255. A valid override cancels startup for this boot; leaving it
+    restarts the selected effect.
+    """
     global led_effect, led_brightness, led_hue, led_sat, led_speed
     led_effect = effect
     led_brightness = brightness
@@ -245,26 +270,51 @@ async def neopixel_task(pixels, effect, brightness, hue, saturation, speed,
 
     state = None
     previous_effect = 0
-    startup = True
+    mode = LedMode.STARTUP
     muted = False
+    previous_frame = None
+    invalid_frame_warned = False
     while True:
         if lights_off is not None and lights_off():
             if not muted:
                 pixels.fill((0, 0, 0))
                 pixels.write()
                 muted = True
+            previous_frame = None
             await asyncio.sleep_ms(1000 // NEOPIXEL_FPS)
             continue
         muted = False
-        if startup:
-            state = led_eff_startup(pixels, state)
-            if state is None:
-                startup = False
+        frame = override_frame() if override_frame is not None else None
+        if frame is not None and not _valid_override_frame(frame, len(pixels)):
+            if not invalid_frame_warned:
+                print("Ignoring invalid NeoPixel override frame")
+                invalid_frame_warned = True
+            frame = None
         else:
-            if previous_effect != led_effect.value:
+            invalid_frame_warned = False
+        if frame is not None:
+            if mode != LedMode.OVERRIDE or frame != previous_frame:
+                for index, color in enumerate(frame):
+                    pixels[index] = color
+                pixels.write()
+                previous_frame = list(frame)
+            mode = LedMode.OVERRIDE
+        else:
+            if mode == LedMode.OVERRIDE:
                 state = None
+                pixels.fill((0, 0, 0))
                 previous_effect = led_effect.value
-            if led_effect.value in range(len(LED_EFFECTS)):
-                state = LED_EFFECTS[led_effect.value][1](pixels, state)
-        pixels.write()
+                mode = LedMode.EFFECT
+                previous_frame = None
+            if mode == LedMode.STARTUP:
+                state = led_eff_startup(pixels, state)
+                if state is None:
+                    mode = LedMode.EFFECT
+            else:
+                if previous_effect != led_effect.value:
+                    state = None
+                    previous_effect = led_effect.value
+                if led_effect.value in range(len(LED_EFFECTS)):
+                    state = LED_EFFECTS[led_effect.value][1](pixels, state)
+            pixels.write()
         await asyncio.sleep_ms(1000 // NEOPIXEL_FPS)

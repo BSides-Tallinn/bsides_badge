@@ -81,6 +81,23 @@ After a Wi-Fi, NTP, TLS connection, or certificate failure, SELECT or NEXT
 retries the procedure from the Wi-Fi connection stage without leaving the
 special Fetch Name mode. BACK still exits from the error screen.
 
+## My Social Battery
+
+Open **Menu -> Social** to display a five-level social battery on the OLED
+and the 16 RGB LEDs. NEXT and PREV change the level, from red (four LEDs)
+through yellow to green (all 16 LEDs). BACK returns to the menu.
+SELECT leaves the level unchanged. The level remains in RAM until reboot and is
+not written to `badge.json`. Reopening Social during the same boot
+restores the last selected level.
+
+The gauge is displayed only while Social is active and temporarily overrides
+all ordinary LED effects, including Off. The global LED brightness applies;
+zero brightness turns the gauge off. Leaving Social restarts the selected
+effect. Entering Social during startup cancels the startup animation.
+After one minute without button activity the OLED dims to reduce pixel
+ageing. Pressing any button restores normal contrast and performs its
+usual action. Press SELECT to restore contrast without changing the level.
+
 ## Badge management tool
 
 Use Python 3.10 or newer on Windows, Linux, or macOS. One Python tool is used so
