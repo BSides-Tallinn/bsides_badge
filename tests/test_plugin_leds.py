@@ -117,7 +117,7 @@ class PluginLedTests(unittest.TestCase):
                                             lambda: muted))
 
         for led in leds:
-            self.assertEqual(led.levels, [65535, 0, 0, 65535, 0])
+            self.assertEqual(led.levels, [65535, 0, 65535, 0])
 
 
 if __name__ == "__main__":

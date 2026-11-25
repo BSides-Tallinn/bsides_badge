@@ -818,7 +818,6 @@ class MenuScreen(Screen):
     def __init__(self, oled):
         super().__init__(oled)
         self.index = 0
-        self.render()
 
     def render(self):
         self.oled.fill(0)
@@ -829,10 +828,8 @@ class MenuScreen(Screen):
     async def handle_button(self, btn):
         if btn == BTN_NEXT:
             self.index = (self.index+1) % len(MenuScreen.items)
-            self.render()
         elif btn == BTN_PREV:
             self.index = (self.index-1) % len(MenuScreen.items)
-            self.render()
         elif btn == BTN_SELECT:
             return MenuScreen.items[self.index][1](self.oled)
         return self
@@ -930,6 +927,8 @@ async def inactivity_task(oled):
     global screen
     last_toggle = time.ticks_ms()
     showing_logo = True
+    displayed = None
+    idle_activity = None
 
     while True:
         await asyncio.sleep_ms(500)
@@ -940,10 +939,20 @@ async def inactivity_task(oled):
                 showing_logo = not showing_logo
                 last_toggle = now
 
-            if showing_logo or not USERNAME:
-                show_bsides_logo(oled)
-            else:
-                show_username(oled, USERNAME)
+            # A UI interaction invalidates the idle presentation, even if the
+            # event loop did not observe the intervening active state.
+            if idle_activity != last_activity:
+                displayed = None
+                idle_activity = last_activity
+            logo = showing_logo or not USERNAME
+            if displayed != logo:
+                if logo:
+                    show_bsides_logo(oled)
+                else:
+                    show_username(oled, USERNAME)
+                displayed = logo
+        else:
+            displayed = None
 
 
 # -----------------------

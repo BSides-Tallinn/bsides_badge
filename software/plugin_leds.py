@@ -36,6 +36,7 @@ async def led_task(effect, lights_off=None):
     try:
         for pin in LED_PINS:
             leds.append(PWM(Pin(pin, Pin.OUT), freq=1000, duty_u16=0))
+        applied = [0, 0]  # PWM starts at zero duty on both channels.
         previous = effect.value
         started = time.ticks_ms()
         while True:
@@ -47,8 +48,11 @@ async def led_task(effect, lights_off=None):
                 levels = (0, 0)
             else:
                 levels = duties(effect.value, time.ticks_diff(now, started))
-            for led, level in zip(leds, levels):
-                led.duty_u16(level)
+            for index in range(len(leds)):
+                level = levels[index]
+                if level != applied[index]:
+                    leds[index].duty_u16(level)
+                    applied[index] = level
             await asyncio.sleep_ms(20)
     finally:
         for led in leds:
