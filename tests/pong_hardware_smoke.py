@@ -16,6 +16,17 @@ import ssd1306
 
 
 class BadgeStub:
+    @staticmethod
+    async def cancel_game_task(task):
+        if task is not None:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            except Exception as exc:
+                print("Game task failed:", exc)
+
     device_id = "FFFFFFFFFFFF"
 
 
@@ -38,6 +49,11 @@ async def main():
     gc.collect()
     start_free = gc.mem_free()
     game = pong.PongScreen(oled)
+    try:
+        await game.start()
+    except BaseException:
+        await game._stop()
+        raise
     game.linked = True
     game.is_host = True
     game.got_peer = True

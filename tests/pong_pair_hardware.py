@@ -16,6 +16,17 @@ from badge_config import load_badge_config
 
 
 class BadgeStub:
+    @staticmethod
+    async def cancel_game_task(task):
+        if task is not None:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            except Exception as exc:
+                print("Game task failed:", exc)
+
     device_id = load_badge_config()["device_id"]
 
 
@@ -26,6 +37,11 @@ from games import pong
 async def main():
     oled = ssd1306.SSD1306_I2C(128, 64, I2C(0, scl=Pin(1), sda=Pin(0)))
     game = pong.PongScreen(oled)
+    try:
+        await game.start()
+    except BaseException:
+        await game._stop()
+        raise
     started = time.ticks_ms()
     previous = None
     play_started = None

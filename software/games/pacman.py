@@ -180,9 +180,9 @@ class GameScreen(bsides.Screen):
         self.ghosts = [Ghost(i) for i in range(len(GHOST_STARTS))]
         self._start_level()
 
-        # Start loop last
-        self._task = asyncio.create_task(self._loop())
+        # Render before creating the task so a failed render cannot leak it.
         self.render()
+        self._task = asyncio.create_task(self._loop())
 
     # ---------- setup ----------
     def _start_level(self):
@@ -631,6 +631,12 @@ class GameScreen(bsides.Screen):
             ty += fh + gap
 
     # ---------- input ----------
+    async def _stop(self):
+        self.running = False
+        task = self._task
+        self._task = None
+        await bsides.cancel_game_task(task)
+
     async def handle_button(self, btn):
         if btn in (BTN_NEXT, BTN_PREV) and not self.paused \
                 and not self.game_over and self.phase in ("ready", "play"):
@@ -643,15 +649,14 @@ class GameScreen(bsides.Screen):
 
         if btn == BTN_SELECT:
             if self.game_over:
-                # cancel old loop before restart
-                try:
-                    if self._task:
-                        self._task.cancel()
-                        await asyncio.sleep_ms(0)
-                except Exception:
-                    pass
+                await self._stop()
                 # re-init fresh
-                self.__init__(self.oled)
+                try:
+                    self.__init__(self.oled)
+                except Exception as exc:
+                    await self._stop()
+                    print("Cannot restart game:", exc)
+                    return bsides.GamesScreen(self.oled)
                 return self
             else:
                 self.paused = not self.paused
@@ -659,12 +664,7 @@ class GameScreen(bsides.Screen):
                 return self
 
         if btn == BTN_BACK:
-            self.running = False
-            try:
-                if self._task:
-                    self._task.cancel()
-            except Exception:
-                pass
+            await self._stop()
             return bsides.GamesScreen(self.oled)
 
         return self

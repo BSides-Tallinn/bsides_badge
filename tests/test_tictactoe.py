@@ -100,8 +100,14 @@ async def _sleep_ms(_ms):
     return None
 
 
+async def _cancel_game_task(task):
+    if task is not None:
+        task.cancel()
+
+
 def _install_stubs():
     bsides = types.ModuleType("bsides")
+    bsides.cancel_game_task = _cancel_game_task
     bsides.BTN_NEXT, bsides.BTN_PREV = 1, 2
     bsides.BTN_SELECT, bsides.BTN_BACK = 3, 4
     bsides.wri6 = _Writer()
@@ -143,7 +149,9 @@ HIGH_ID, LOW_ID = "FFFF00000001", "0000AAAA0002"
 
 def make(device_id):
     ttt.bsides.device_id = device_id
-    return ttt.TicTacToeScreen(_FakeOled())
+    game = ttt.TicTacToeScreen(_FakeOled())
+    asyncio.run(game.start())
+    return game
 
 
 def wire(a, b):
@@ -361,9 +369,11 @@ class LinkedGameTests(unittest.TestCase):
         self.assertEqual(g.board, ["-"] * 9)
 
     def test_back_releases_the_uart(self):
+        uart = self.host.uart
         self.assertEqual(press(self.host, BTN_BACK), "games")
         self.assertFalse(self.host.running)
-        self.assertTrue(self.host.uart.closed)
+        self.assertTrue(uart.closed)
+        self.assertIsNone(self.host.uart)
 
 
 class LonelyBadgeTests(unittest.TestCase):
