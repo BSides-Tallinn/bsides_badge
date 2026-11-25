@@ -11,7 +11,6 @@ BTN_NEXT = bsides.BTN_NEXT
 BTN_PREV = bsides.BTN_PREV
 BTN_SELECT = bsides.BTN_SELECT
 BTN_BACK = bsides.BTN_BACK
-wri6 = bsides.wri6
 
 FRAME_MS = 50             # physics and render step (20 fps)
 
@@ -74,7 +73,7 @@ class GameScreen(bsides.Screen):
         super().__init__(oled)
 
         # ----- GEOMETRY -----
-        self.HUD_H = wri6.font.height()
+        self.HUD_H = bsides.wri6.font.height()
         self.top = self.HUD_H                 # first playfield row
         self.ground = oled.height - 2         # ground line; bird dies on it
 
@@ -183,13 +182,13 @@ class GameScreen(bsides.Screen):
     def _draw_hud(self):
         self.oled.fill_rect(0, 0, self.oled.width, self.HUD_H, 0)
 
-        wri6.set_textpos(self.oled, 0, 0)
-        wri6.printstring("SCORE:{:d}".format(self.score))
+        bsides.wri6.set_textpos(self.oled, 0, 0)
+        bsides.wri6.printstring("SCORE:{:d}".format(self.score))
 
         hi_txt = "HI:{:d}".format(self.high_score)
-        x_hi = self.oled.width - wri6.stringlen(hi_txt)
-        wri6.set_textpos(self.oled, 0, x_hi)
-        wri6.printstring(hi_txt)
+        x_hi = self.oled.width - bsides.wri6.stringlen(hi_txt)
+        bsides.wri6.set_textpos(self.oled, 0, x_hi)
+        bsides.wri6.printstring(hi_txt)
 
         self.oled.hline(0, self.HUD_H - 1, self.oled.width, 1)
 
@@ -243,20 +242,20 @@ class GameScreen(bsides.Screen):
         """Centered text box that always fits; low=True sits near the ground."""
         pad = 2
         gap = 1
-        fh = wri6.font.height()
+        fh = bsides.wri6.font.height()
 
         trimmed = []
         for s in lines:
-            if wri6.stringlen(s) <= self.oled.width - 2 * pad:
+            if bsides.wri6.stringlen(s) <= self.oled.width - 2 * pad:
                 trimmed.append(s)
             else:
                 base = s
-                while base and wri6.stringlen(base + "...") > self.oled.width - 2 * pad:
+                while base and bsides.wri6.stringlen(base + "...") > self.oled.width - 2 * pad:
                     base = base[:-1]
                 trimmed.append((base + "...") if base else "...")
         lines = trimmed
 
-        max_line_w = max(wri6.stringlen(s) for s in lines)
+        max_line_w = max(bsides.wri6.stringlen(s) for s in lines)
         box_w = min(self.oled.width, max_line_w + 2 * pad)
         box_h = len(lines) * fh + (len(lines) - 1) * gap + 2 * pad
 
@@ -273,11 +272,11 @@ class GameScreen(bsides.Screen):
 
         ty = y + pad
         for s in lines:
-            tw = wri6.stringlen(s)
+            tw = bsides.wri6.stringlen(s)
             tx = x + (box_w - tw) // 2
             if tx < 0: tx = 0
-            wri6.set_textpos(self.oled, ty, tx)
-            wri6.printstring(s)
+            bsides.wri6.set_textpos(self.oled, ty, tx)
+            bsides.wri6.printstring(s)
             ty += fh + gap
 
     # ---------- input ----------

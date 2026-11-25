@@ -11,7 +11,6 @@ BTN_NEXT = bsides.BTN_NEXT
 BTN_PREV = bsides.BTN_PREV
 BTN_SELECT = bsides.BTN_SELECT
 BTN_BACK = bsides.BTN_BACK
-wri6 = bsides.wri6
 
 # Well geometry: a 10x15 portrait well of 4x4 px cells in the middle of the
 # display, with the next piece and level on the left and scores on the right.
@@ -308,29 +307,29 @@ class GameScreen(bsides.Screen):
 
     def _draw_panels(self):
         o = self.oled
-        fh = wri6.font.height()
+        fh = bsides.wri6.font.height()
 
         # Left: next piece, level, lines
-        wri6.set_textpos(o, 0, 2)
-        wri6.printstring("NEXT")
+        bsides.wri6.set_textpos(o, 0, 2)
+        bsides.wri6.printstring("NEXT")
         nx, ny = 10, fh + 2
         for dx, dy in PIECES[self.next_kind][0]:
             o.fill_rect(nx + dx * CELL, ny + dy * CELL, CELL - 1, CELL - 1, 1)
-        wri6.set_textpos(o, fh + 2 + 4 * CELL + 2, 2)
-        wri6.printstring("LV{:d}".format(self.level))
-        wri6.set_textpos(o, o.height - fh, 2)
-        wri6.printstring("LN{:d}".format(self.lines))
+        bsides.wri6.set_textpos(o, fh + 2 + 4 * CELL + 2, 2)
+        bsides.wri6.printstring("LV{:d}".format(self.level))
+        bsides.wri6.set_textpos(o, o.height - fh, 2)
+        bsides.wri6.printstring("LN{:d}".format(self.lines))
 
         # Right: score and high score
         rx = WELL_X + COLS * CELL + 3
-        wri6.set_textpos(o, 0, rx)
-        wri6.printstring("SC")
-        wri6.set_textpos(o, fh, rx)
-        wri6.printstring("{:d}".format(self.score))
-        wri6.set_textpos(o, o.height - 2 * fh, rx)
-        wri6.printstring("HI")
-        wri6.set_textpos(o, o.height - fh, rx)
-        wri6.printstring("{:d}".format(self.high_score))
+        bsides.wri6.set_textpos(o, 0, rx)
+        bsides.wri6.printstring("SC")
+        bsides.wri6.set_textpos(o, fh, rx)
+        bsides.wri6.printstring("{:d}".format(self.score))
+        bsides.wri6.set_textpos(o, o.height - 2 * fh, rx)
+        bsides.wri6.printstring("HI")
+        bsides.wri6.set_textpos(o, o.height - fh, rx)
+        bsides.wri6.printstring("{:d}".format(self.high_score))
 
     def render(self):
         self.oled.fill(0)
@@ -345,20 +344,20 @@ class GameScreen(bsides.Screen):
         lines = ["GAME OVER", "SELECT=Restart"]
         pad = 2
         gap = 1
-        fh = wri6.font.height()
+        fh = bsides.wri6.font.height()
 
         trimmed = []
         for s in lines:
-            if wri6.stringlen(s) <= self.oled.width - 2 * pad:
+            if bsides.wri6.stringlen(s) <= self.oled.width - 2 * pad:
                 trimmed.append(s)
             else:
                 base = s
-                while base and wri6.stringlen(base + "...") > self.oled.width - 2 * pad:
+                while base and bsides.wri6.stringlen(base + "...") > self.oled.width - 2 * pad:
                     base = base[:-1]
                 trimmed.append((base + "...") if base else "...")
         lines = trimmed
 
-        max_line_w = max(wri6.stringlen(s) for s in lines)
+        max_line_w = max(bsides.wri6.stringlen(s) for s in lines)
         box_w = min(self.oled.width, max_line_w + 2 * pad)
         box_h = 2 * fh + gap + 2 * pad
 
@@ -372,11 +371,11 @@ class GameScreen(bsides.Screen):
 
         ty = y + pad
         for s in lines:
-            tw = wri6.stringlen(s)
+            tw = bsides.wri6.stringlen(s)
             tx = x + (box_w - tw) // 2
             if tx < 0: tx = 0
-            wri6.set_textpos(self.oled, ty, tx)
-            wri6.printstring(s)
+            bsides.wri6.set_textpos(self.oled, ty, tx)
+            bsides.wri6.printstring(s)
             ty += fh + gap
 
     # ---------- input ----------

@@ -19,7 +19,6 @@ BTN_NEXT = bsides.BTN_NEXT
 BTN_PREV = bsides.BTN_PREV
 BTN_SELECT = bsides.BTN_SELECT
 BTN_BACK = bsides.BTN_BACK
-wri6 = bsides.wri6
 
 TICK_MS = 50
 HELLO_MS = 300            # hello interval while looking for a peer
@@ -394,13 +393,13 @@ class TicTacToeScreen:
 
     # ---------- drawing ----------
     def _center6(self, text, y):
-        w = wri6.stringlen(text)
-        wri6.set_textpos(self.oled, y, max(0, (self.oled.width - w) // 2))
-        wri6.printstring(text)
+        w = bsides.wri6.stringlen(text)
+        bsides.wri6.set_textpos(self.oled, y, max(0, (self.oled.width - w) // 2))
+        bsides.wri6.printstring(text)
 
     def _panel(self, text, y):
-        wri6.set_textpos(self.oled, y, PANEL_X)
-        wri6.printstring(text)
+        bsides.wri6.set_textpos(self.oled, y, PANEL_X)
+        bsides.wri6.printstring(text)
 
     def _draw_mark(self, cell, mark):
         o = self.oled
@@ -453,7 +452,7 @@ class TicTacToeScreen:
             o.rect(cx + 2, cy + 2, CELL - 3, CELL - 3, 1)
 
     def _draw_panel(self):
-        fh = wri6.font.height()
+        fh = bsides.wri6.font.height()
         mark = self.my_mark()
         self._panel("You: " + mark, 0)
         result = winner(self.board)[0]
