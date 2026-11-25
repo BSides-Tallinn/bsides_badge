@@ -27,15 +27,15 @@ I2C_SDA = 0
 OLED_WIDTH = 128
 OLED_HEIGHT = 64
 
-badge_config = load_badge_config()
-BADGE_VERSION = badge_config["badge_version"]
-HARDWARE = hardware_for(BADGE_VERSION)
-OLED_ADDRESS = HARDWARE["oled_address"]
+badge_config = None
+BADGE_VERSION = None
+HARDWARE = None
+OLED_ADDRESS = None
 
 # Buttons
 BTN_NEXT_PIN = 5      # Next / Increase
 BTN_PREV_PIN = 8      # Previous / Decrease
-BTN_SELECT_PIN = HARDWARE["select_pin"]  # Enter
+BTN_SELECT_PIN = None  # Assigned from the hardware profile at startup
 BTN_BACK_PIN = 9      # Back
 DEBOUNCE_MS = 50
 
@@ -64,14 +64,10 @@ btn_state = {}       # {btn_id: pressed or not}
 repeat_tasks = {}    # {btn_id: task}
 _last_event_ms = {}  # debounce tracking
 
-i2c_oled = I2C(0, scl=Pin(I2C_SCL), sda=Pin(I2C_SDA))
-oled = ssd1306.SSD1306_I2C(OLED_WIDTH, OLED_HEIGHT, i2c_oled,
-                           addr=OLED_ADDRESS)
-wri6  = Writer(oled, font6, verbose=False)
-wri10 = Writer(oled, font10, verbose=False)
-wri20 = Writer(oled, freesans20, verbose=False)
-
-username_wri = wri20
+i2c_oled = None
+oled = None
+wri6 = wri10 = wri20 = None
+username_wri = None
 username_lines = None
 
 # -----------------------
@@ -141,9 +137,8 @@ def load_params():
 # -----------------------
 # Username and ID
 # -----------------------
-USERNAME = badge_config.get("holder_name") or None
-device_id = badge_config["device_id"]
-print("Device ID: {}".format(device_id))
+USERNAME = None
+device_id = None
 # -----------------------
 # Button IRQ handling
 # -----------------------
@@ -978,7 +973,33 @@ async def main():
     tasks.append(plugin_leds.led_task(plugin_effect, mute_game_lights))
     await asyncio.gather(*tasks)
 
-try:
-    asyncio.run(main())
-finally:
-    asyncio.new_event_loop()
+def initialize(config):
+    """Bind the normal runtime to the selected board and persisted settings."""
+    global badge_config, BADGE_VERSION, HARDWARE, OLED_ADDRESS, BTN_SELECT_PIN
+    global i2c_oled, oled, wri6, wri10, wri20, username_wri, username_lines
+    global USERNAME, device_id
+    badge_config = config
+    BADGE_VERSION = config["badge_version"]
+    HARDWARE = hardware_for(BADGE_VERSION)
+    OLED_ADDRESS = HARDWARE["oled_address"]
+    BTN_SELECT_PIN = HARDWARE["select_pin"]
+    i2c_oled = I2C(0, scl=Pin(I2C_SCL), sda=Pin(I2C_SDA))
+    oled = ssd1306.SSD1306_I2C(OLED_WIDTH, OLED_HEIGHT, i2c_oled,
+                               addr=OLED_ADDRESS)
+    wri6 = Writer(oled, font6, verbose=False)
+    wri10 = Writer(oled, font10, verbose=False)
+    wri20 = Writer(oled, freesans20, verbose=False)
+    username_wri = wri20
+    username_lines = None
+    USERNAME = config.get("holder_name") or None
+    device_id = config["device_id"]
+    print("Device ID: {}".format(device_id))
+
+
+def run(config=None):
+    """Explicit normal-boot entry point; imports alone never start the runtime."""
+    initialize(load_badge_config() if config is None else config)
+    try:
+        asyncio.run(main())
+    finally:
+        asyncio.new_event_loop()

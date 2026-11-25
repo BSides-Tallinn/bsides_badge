@@ -12,7 +12,6 @@ BTN_NEXT = bsides.BTN_NEXT
 BTN_PREV = bsides.BTN_PREV
 BTN_SELECT = bsides.BTN_SELECT
 BTN_BACK = bsides.BTN_BACK
-wri6 = bsides.wri6
 
 # Maze legend:
 #   '#' wall           '.' dot          'o' power pellet
@@ -158,7 +157,7 @@ class GameScreen(bsides.Screen):
         super().__init__(oled)
 
         # ----- GEOMETRY -----
-        self.HUD_H = wri6.font.height()
+        self.HUD_H = bsides.wri6.font.height()
         self.GRID_Y0 = self.HUD_H
         self.PF_H = GRID_H * self.CELL
 
@@ -469,8 +468,8 @@ class GameScreen(bsides.Screen):
     def _draw_hud(self):
         self.oled.fill_rect(0, 0, self.oled.width, self.HUD_H, 0)
 
-        wri6.set_textpos(self.oled, 0, 0)
-        wri6.printstring("{:d}".format(self.score))
+        bsides.wri6.set_textpos(self.oled, 0, 0)
+        bsides.wri6.printstring("{:d}".format(self.score))
 
         # Lives as small blocks in the middle
         n = min(self.lives, MAX_LIFE_ICONS)
@@ -480,9 +479,9 @@ class GameScreen(bsides.Screen):
             self.oled.fill_rect(x0 + i * 5, y0, 3, 3, 1)
 
         hi_txt = "HI:{:d}".format(self.high_score)
-        x_hi = self.oled.width - wri6.stringlen(hi_txt)
-        wri6.set_textpos(self.oled, 0, x_hi)
-        wri6.printstring(hi_txt)
+        x_hi = self.oled.width - bsides.wri6.stringlen(hi_txt)
+        bsides.wri6.set_textpos(self.oled, 0, x_hi)
+        bsides.wri6.printstring(hi_txt)
 
         self.oled.hline(0, self.HUD_H - 1, self.oled.width, 1)
 
@@ -564,16 +563,16 @@ class GameScreen(bsides.Screen):
     def _overlay_center(self, text):
         """Draw a single-line centered overlay; safely clamps width."""
         pad = 2
-        fh = wri6.font.height()
+        fh = bsides.wri6.font.height()
         max_text_w = self.oled.width - 2 * pad
 
-        if wri6.stringlen(text) > max_text_w:
+        if bsides.wri6.stringlen(text) > max_text_w:
             base = text
-            while base and wri6.stringlen(base + "...") > max_text_w:
+            while base and bsides.wri6.stringlen(base + "...") > max_text_w:
                 base = base[:-1]
             text = (base + "...") if base else "..."
 
-        tw = wri6.stringlen(text)
+        tw = bsides.wri6.stringlen(text)
         box_w = min(self.oled.width, tw + 2 * pad)
         box_h = fh + 2 * pad
 
@@ -585,31 +584,31 @@ class GameScreen(bsides.Screen):
         self.oled.fill_rect(x, y, box_w, box_h, 0)
         self.oled.rect(x, y, box_w, box_h, 1)
 
-        tw = wri6.stringlen(text)
+        tw = bsides.wri6.stringlen(text)
         tx = x + (box_w - tw) // 2
         if tx < 0: tx = 0
-        wri6.set_textpos(self.oled, y + pad, tx)
-        wri6.printstring(text)
+        bsides.wri6.set_textpos(self.oled, y + pad, tx)
+        bsides.wri6.printstring(text)
 
     def _overlay_gameover(self):
         """Two-line centered overlay that always fits."""
         lines = ["GAME OVER", "SELECT=Restart"]
         pad = 2
         gap = 1
-        fh = wri6.font.height()
+        fh = bsides.wri6.font.height()
 
         trimmed = []
         for s in lines:
-            if wri6.stringlen(s) <= self.oled.width - 2 * pad:
+            if bsides.wri6.stringlen(s) <= self.oled.width - 2 * pad:
                 trimmed.append(s)
             else:
                 base = s
-                while base and wri6.stringlen(base + "...") > self.oled.width - 2 * pad:
+                while base and bsides.wri6.stringlen(base + "...") > self.oled.width - 2 * pad:
                     base = base[:-1]
                 trimmed.append((base + "...") if base else "...")
         lines = trimmed
 
-        max_line_w = max(wri6.stringlen(s) for s in lines)
+        max_line_w = max(bsides.wri6.stringlen(s) for s in lines)
         box_w = min(self.oled.width, max_line_w + 2 * pad)
         box_h = 2 * fh + gap + 2 * pad
 
@@ -623,11 +622,11 @@ class GameScreen(bsides.Screen):
 
         ty = y + pad
         for s in lines:
-            tw = wri6.stringlen(s)
+            tw = bsides.wri6.stringlen(s)
             tx = x + (box_w - tw) // 2
             if tx < 0: tx = 0
-            wri6.set_textpos(self.oled, ty, tx)
-            wri6.printstring(s)
+            bsides.wri6.set_textpos(self.oled, ty, tx)
+            bsides.wri6.printstring(s)
             ty += fh + gap
 
     # ---------- input ----------
