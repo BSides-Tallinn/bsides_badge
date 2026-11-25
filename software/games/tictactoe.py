@@ -100,9 +100,8 @@ class TicTacToeScreen:
         self.oled = oled
         self.my_id = bsides.device_id
 
-        self.uart = machine.UART(UART_ID, baudrate=UART_BAUD,
-                                 tx=machine.Pin(UART_TX),
-                                 rx=machine.Pin(UART_RX), timeout=0)
+        self.uart = None
+        self._tasks = []
 
         self.running = True
         self.peer_id = None
@@ -116,9 +115,13 @@ class TicTacToeScreen:
         self._clear_game()
         self._start_link()
 
-        self._tasks = [asyncio.create_task(self._loop()),
-                       asyncio.create_task(self._rx())]
+    async def start(self):
+        self.uart = machine.UART(UART_ID, baudrate=UART_BAUD,
+                                 tx=machine.Pin(UART_TX),
+                                 rx=machine.Pin(UART_RX), timeout=0)
         self.render()
+        self._tasks.append(asyncio.create_task(self._loop()))
+        self._tasks.append(asyncio.create_task(self._rx()))
 
     # ---------- state helpers ----------
     def _clear_game(self):
@@ -384,13 +387,21 @@ class TicTacToeScreen:
 
     async def _stop(self):
         self.running = False
-        for t in self._tasks:
-            t.cancel()
-        await asyncio.sleep_ms(0)
+        tasks = self._tasks
+        self._tasks = ()
+        for task in tasks:
+            task.cancel()
         try:
-            self.uart.deinit()
-        except Exception:
-            pass
+            for task in tasks:
+                await bsides.cancel_game_task(task)
+        finally:
+            uart = self.uart
+            self.uart = None
+            if uart is not None:
+                try:
+                    uart.deinit()
+                except Exception as exc:
+                    print("Cannot deinitialise game UART:", exc)
 
     # ---------- drawing ----------
     def _center6(self, text, y):
@@ -533,5 +544,5 @@ class TicTacToeScreen:
         return self
 
 
-# Contract used by bsides.discover_games().
+# Game screen entry point.
 GameScreen = TicTacToeScreen

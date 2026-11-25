@@ -97,9 +97,9 @@ class GameScreen(bsides.Screen):
         self._last_press = {BTN_NEXT: old, BTN_PREV: old}
         self._over_t = old
 
-        # Start loop last
-        self._task = asyncio.create_task(self._loop())
+        # Render before creating the task so a failed render cannot leak it.
         self.render()
+        self._task = asyncio.create_task(self._loop())
 
     # ---------- game logic ----------
     def _spawn_pipe(self, x):
@@ -281,16 +281,17 @@ class GameScreen(bsides.Screen):
             ty += fh + gap
 
     # ---------- input ----------
+    async def _stop(self):
+        self.running = False
+        task = self._task
+        self._task = None
+        await bsides.cancel_game_task(task)
+
     async def handle_button(self, btn):
         now = time.ticks_ms()
 
         if btn == BTN_BACK:
-            self.running = False
-            try:
-                if self._task:
-                    self._task.cancel()
-            except Exception:
-                pass
+            await self._stop()
             return bsides.GamesScreen(self.oled)
 
         # NEXT/PREV auto-repeat every 10 ms while held. Holding must not
@@ -304,15 +305,14 @@ class GameScreen(bsides.Screen):
         if self.phase == "over":
             if btn == BTN_SELECT and \
                     time.ticks_diff(now, self._over_t) >= RESTART_DELAY_MS:
-                # cancel old loop before restart
-                try:
-                    if self._task:
-                        self._task.cancel()
-                        await asyncio.sleep_ms(0)
-                except Exception:
-                    pass
+                await self._stop()
                 # re-init fresh
-                self.__init__(self.oled)
+                try:
+                    self.__init__(self.oled)
+                except Exception as exc:
+                    await self._stop()
+                    print("Cannot restart game:", exc)
+                    return bsides.GamesScreen(self.oled)
             return self
 
         if btn == BTN_PREV:

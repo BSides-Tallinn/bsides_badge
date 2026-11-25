@@ -65,8 +65,14 @@ async def _sleep_ms(_ms):
     return None
 
 
+async def _cancel_game_task(task):
+    if task is not None:
+        task.cancel()
+
+
 def _install_stubs():
     bsides = types.ModuleType("bsides")
+    bsides.cancel_game_task = _cancel_game_task
     bsides.BTN_NEXT, bsides.BTN_PREV = 1, 2
     bsides.BTN_SELECT, bsides.BTN_BACK = 3, 4
     bsides.wri6 = _Writer()

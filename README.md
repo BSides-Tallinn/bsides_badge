@@ -170,19 +170,26 @@ currently measured battery voltage as its final output line. It adds
 
 ## Games
 
-Open **Menu -> Games** to select an installed game. The menu discovers Python
-files in `software/games` at runtime. Flappy Bird, Pacman, Snake, Tetris, and
-the two-player games Pong and Tic-tac-toe are included.
+Open **Menu -> Games** to select a bundled game. The menu uses the immutable
+`GAMES` registry in `software/bsides.py` without scanning the filesystem.
+Game modules are imported only when selected. Bundled games: Flappy Bird,
+Pacman, Pong, Snake, Tetris and Tic-tac-toe.
 
-To add a game, place a `.py` file in `software/games`. It must export:
+To add a game, place its module in `software/games` and add its display name
+and module name to the registry. The module must export:
 
 ```python
-GAME_NAME = "My game"
 GameScreen = MyGameScreen
 ```
 
+A module that fails to load remains listed; selecting it logs the error and
+returns to the Games menu.
+
 `GameScreen(oled)` must provide `render()` and async `handle_button(btn)`
-methods. Set `manages_own_render = True` when the game owns an animation loop.
+methods. Render before creating a single background task. Games acquiring
+multiple resources must defer acquisition to async `start()` and implement
+async `_stop()` to release them, including after partial startup failures.
+Set `manages_own_render = True` when the game owns an animation loop.
 On exit, return `bsides.GamesScreen(oled)`.
 
 ### Flappy Bird

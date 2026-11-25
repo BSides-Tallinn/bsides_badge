@@ -2,6 +2,7 @@ import time
 import urandom
 import machine
 import uasyncio as asyncio
+import bsides
 
 from writer.writer import Writer
 import writer.font6 as font6
@@ -91,13 +92,10 @@ class PongScreen:
         self.pl_x = 2
         self.pr_x = oled.width - 2 - PADDLE_W
 
-        import bsides
         self.my_id = bsides.device_id
 
-        self.uart = machine.UART(UART_ID, baudrate=UART_BAUD,
-                                 tx=machine.Pin(UART_TX),
-                                 rx=machine.Pin(UART_RX), timeout=0,
-                                 rxbuf=1024)
+        self.uart = None
+        self._tasks = []
 
         self.running = True
         self.phase = "link"          # link/count/play/over/nolink/lost
@@ -127,9 +125,14 @@ class PongScreen:
         self.last_render = time.ticks_add(self.last_rx, -RENDER_MS)
         self._dirty = True
 
-        self._tasks = [asyncio.create_task(self._loop()),
-                       asyncio.create_task(self._rx())]
+    async def start(self):
+        self.uart = machine.UART(UART_ID, baudrate=UART_BAUD,
+                                 tx=machine.Pin(UART_TX),
+                                 rx=machine.Pin(UART_RX), timeout=0,
+                                 rxbuf=1024)
         self.render()
+        self._tasks.append(asyncio.create_task(self._loop()))
+        self._tasks.append(asyncio.create_task(self._rx()))
 
     # ---------- helpers ----------
     def _clamp_paddle(self, y):
@@ -172,13 +175,21 @@ class PongScreen:
 
     async def _stop(self):
         self.running = False
-        for t in self._tasks:
-            t.cancel()
-        await asyncio.sleep_ms(0)
+        tasks = self._tasks
+        self._tasks = ()
+        for task in tasks:
+            task.cancel()
         try:
-            self.uart.deinit()
-        except Exception:
-            pass
+            for task in tasks:
+                await bsides.cancel_game_task(task)
+        finally:
+            uart = self.uart
+            self.uart = None
+            if uart is not None:
+                try:
+                    uart.deinit()
+                except Exception as exc:
+                    print("Cannot deinitialise game UART:", exc)
 
     # ---------- host physics ----------
     def _overlaps(self, py):
@@ -475,7 +486,6 @@ class PongScreen:
     async def handle_button(self, btn):
         if btn == BTN_BACK:
             await self._stop()
-            import bsides
             return bsides.GamesScreen(self.oled)
         if self.phase in ("count", "play"):
             if btn == BTN_NEXT:
@@ -499,5 +509,5 @@ class PongScreen:
         return self
 
 
-# Contract used by bsides.discover_games().
+# Game screen entry point.
 GameScreen = PongScreen

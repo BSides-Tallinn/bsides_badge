@@ -161,9 +161,9 @@ class GameScreen(bsides.Screen):
         self._dirty = False
         self._spawn()
 
-        # Start loop last
-        self._task = asyncio.create_task(self._loop())
+        # Render before creating the task so a failed render cannot leak it.
         self.render()
+        self._task = asyncio.create_task(self._loop())
 
     # ---------- piece handling ----------
     def _cells(self):
@@ -380,19 +380,24 @@ class GameScreen(bsides.Screen):
             ty += fh + gap
 
     # ---------- input ----------
+    async def _stop(self):
+        self.running = False
+        task = self._task
+        self._task = None
+        await bsides.cancel_game_task(task)
+
     async def handle_button(self, btn):
         now = time.ticks_ms()
         if self.game_over:
             if btn == BTN_SELECT:
-                # cancel old loop before restart
-                try:
-                    if self._task:
-                        self._task.cancel()
-                        await asyncio.sleep_ms(0)
-                except Exception:
-                    pass
+                await self._stop()
                 # re-init fresh
-                self.__init__(self.oled)
+                try:
+                    self.__init__(self.oled)
+                except Exception as exc:
+                    await self._stop()
+                    print("Cannot restart game:", exc)
+                    return bsides.GamesScreen(self.oled)
                 return self
         elif not self.clearing:
             if btn in (BTN_NEXT, BTN_PREV):
@@ -408,12 +413,7 @@ class GameScreen(bsides.Screen):
                     self.render()
 
         if btn == BTN_BACK:
-            self.running = False
-            try:
-                if self._task:
-                    self._task.cancel()
-            except Exception:
-                pass
+            await self._stop()
             return bsides.GamesScreen(self.oled)
 
         return self

@@ -75,12 +75,18 @@ class Writer:
         return len(value) * 6
 
 
+async def _cancel_game_task(task):
+    if task is not None:
+        task.cancel()
+
+
 class PongTests(unittest.TestCase):
     def setUp(self):
         Clock.now = 100000
         self.badge = types.ModuleType("bsides")
         self.badge.device_id = "AAAAAAAAAAAA"
         self.badge.GamesScreen = lambda oled: oled
+        self.badge.cancel_game_task = _cancel_game_task
 
         machine = types.ModuleType("machine")
         machine.Pin = lambda *_args, **_kwargs: None
@@ -124,6 +130,7 @@ class PongTests(unittest.TestCase):
 
     def test_guest_heartbeats_and_rendering_survive_slow_display(self):
         screen = self.pong.PongScreen(OLED())
+        asyncio.run(screen.start())
         self.assertEqual(screen.uart.rxbuf, 1024)
         screen.phase = "play"
         screen.is_host = False
@@ -149,6 +156,7 @@ class PongTests(unittest.TestCase):
 
     def test_lost_peer_reconnects_without_button(self):
         screen = self.pong.PongScreen(OLED())
+        asyncio.run(screen.start())
         screen.phase = "lost"
         screen.peer_id = "BBBBBBBBBBBB"
         screen._handle_line(b"HBBBBBBBBBBBB")
@@ -162,6 +170,7 @@ class PongTests(unittest.TestCase):
     def test_playing_host_accepts_seeking_peer(self):
         self.badge.device_id = "BBBBBBBBBBBB"
         screen = self.pong.PongScreen(OLED())
+        asyncio.run(screen.start())
         screen.phase = "play"
         screen.peer_id = "AAAAAAAAAAAA"
         screen.is_host = True
@@ -179,6 +188,7 @@ class PongTests(unittest.TestCase):
         self.assertIsNone(self.pong.unframe(b"E1,2"))
         self.assertIsNone(self.pong.unframe(valid[:-2] + b"0"))
         screen = self.pong.PongScreen(OLED())
+        asyncio.run(screen.start())
         screen.is_host = False
         screen.phase = "link"
         screen._handle_line(b"E1,2")

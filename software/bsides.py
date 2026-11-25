@@ -769,39 +769,56 @@ class OurteamScreen(TextScreen):
 # Menu screen
 # -----------------------
 
-GAMES_FOLDER = "games"
+GAMES = (
+    ("Flappy Bird", "flappy"),
+    ("Pacman", "pacman"),
+    ("Pong", "pong"),
+    ("Snake", "snake"),
+    ("Tetris", "tetris"),
+    ("Tic-tac-toe", "tictactoe"),
+)
 
 
-def discover_games():
-    """Return (display name, screen class) pairs exported by games/*.py."""
-    games = []
-    try:
-        filenames = sorted(os.listdir(GAMES_FOLDER))
-    except OSError as exc:
-        print("Cannot scan games directory:", exc)
-        return games
-
-    for filename in filenames:
-        if not filename.endswith(".py") or filename.startswith("_"):
-            continue
-        module_name = filename[:-3]
+async def cancel_game_task(task):
+    if task is not None:
+        task.cancel()
         try:
-            module = __import__("games." + module_name, None, None,
-                                ("GAME_NAME", "GameScreen"))
-            games.append((module.GAME_NAME, module.GameScreen))
+            await task
+        except asyncio.CancelledError:
+            pass
         except Exception as exc:
-            # One broken optional game should not prevent the badge from booting.
-            print("Cannot load game {}: {}".format(filename, exc))
-    return games
+            print("Game task failed:", exc)
 
 
 class GamesScreen(ListScreen):
     def __init__(self, oled):
-        self.games = discover_games()
-        super().__init__(oled, "Games", self.games)
+        super().__init__(oled, "Games", GAMES)
 
-    def on_select(self, index):
-        return self.games[index][1](self.oled)
+    async def handle_button(self, btn):
+        if btn == BTN_SELECT:
+            return await self.on_select(self.index)
+        return await super().handle_button(btn)
+
+    async def on_select(self, index):
+        module_name = self.items[index][1]
+        self.oled.fill(0)
+        self.headerwriter.set_textpos(self.oled, 0, 0)
+        self.headerwriter.printstring("Loading...")
+        self.oled.show()
+        game = None
+        try:
+            module = __import__("games." + module_name, None, None,
+                                ("GameScreen",))
+            game = module.GameScreen(self.oled)
+            start = getattr(game, "start", None)
+            if start is not None:
+                await start()
+            return game
+        except Exception as exc:
+            if game is not None:
+                await game._stop()
+            print("Cannot load game {}: {}".format(module_name, exc))
+            return self
 
     def on_back(self):
         return MenuScreen(self.oled)
